@@ -412,7 +412,7 @@ def load_state(path):
         with open(os.path.expanduser(path)) as f:
             return json.load(f)
     except Exception:
-        return {"signature": None, "last_refresh": 0, "window_mode": None, "last_toggle": 0}
+        return {"signature": None, "last_refresh": 0, "window_mode": None, "layout_mode": None, "last_toggle": 0}
 
 
 def save_state(path, sig, when, state=None):
@@ -424,6 +424,7 @@ def save_state(path, sig, when, state=None):
         "signature": sig,
         "last_refresh": when,
         "window_mode": state.get("window_mode"),
+        "layout_mode": state.get("layout_mode"),
         "last_toggle": state.get("last_toggle", 0),
     }
     with open(tmp, "w") as f:
@@ -525,6 +526,9 @@ def obtain_image(cfg, species=None):
 def run(cfg, preview=None, force=False, use_signature=True, mat_box=False):
     now = time.time()
     state = load_state(cfg["state"])
+    if not cfg.get("_layout_mode_from_config") and state.get("layout_mode"):
+        cfg["_layout_mode"] = _normalize_layout_mode(state.get("layout_mode"))
+    state["layout_mode"] = _active_layout_mode(cfg)
     before_mode = _normalize_window_mode(state.get("window_mode") or cfg.get("window_mode", "24h"))
     cfg["_window_mode"] = _apply_button_toggle(cfg, state)
     cfg.pop("_button_pressed", None)
@@ -618,14 +622,18 @@ def watch_button(cfg):
 
 def load_config(path):
     cfg = dict(DEFAULTS)
+    layout_mode_from_config = False
     if path:
         with open(os.path.expanduser(path), "rb") as f:
-            cfg.update(tomllib.load(f))
+            data = tomllib.load(f)
+        layout_mode_from_config = "layout_mode" in data
+        cfg.update(data)
     cfg["window_mode"] = _normalize_window_mode(cfg.get("window_mode", "24h"))
     cfg["layout_mode"] = _normalize_layout_mode(cfg.get("layout_mode", "framed"))
     # Lock layout mode at process start so button-based window toggles can
     # never drift fullscreen runs back to framed until the service restarts.
     cfg["_layout_mode"] = cfg["layout_mode"]
+    cfg["_layout_mode_from_config"] = layout_mode_from_config
     return cfg
 
 
