@@ -129,23 +129,41 @@ def _hours_since_midnight(now_local=None):
     return max(1, int((secs + 3599) // 3600))
 
 
-def _fetch_recent_url(base, timeout, auth=None, **params):
+def _fetch_recent_payload(base, timeout, auth=None, **params):
     url = f"{base.rstrip('/')}/avian/api/birdnet-api.php?{urlencode({**params, 'action': 'recent'})}"
     req = urllib.request.Request(url, headers={"User-Agent": "AvianVisitors-frame/1.0"})
     if auth:
         req.add_header("Authorization", auth)
     with urllib.request.urlopen(req, timeout=timeout) as r:
-        return json.loads(r.read(2_000_000)).get("species", [])
+        return json.loads(r.read(2_000_000))
+
+
+def _fetch_recent_url(base, timeout, auth=None, **params):
+    return _fetch_recent_payload(base, timeout, auth, **params).get("species", [])
 
 
 def fetch_recent(base, hours, timeout, auth=None, window_mode="24h"):
     mode = _normalize_window_mode(window_mode)
     if mode == "today":
         try:
-            return _fetch_recent_url(base, timeout, auth, today=1)
+            payload = _fetch_recent_payload(base, timeout, auth, today=1)
+            # Older API builds can ignore today=1 and still return a rolling
+            # window. Only trust this response if the payload confirms today.
+            if payload.get("today") is True:
+                return payload.get("species", [])
         except Exception:
-            # Backward compatibility for older API deployments without today=1.
-            return _fetch_recent_url(base, timeout, auth, hours=_hours_since_midnight())
+            pass
+        # Backward compatibility for older API deployments without today=1.
+        hrs = _hours_since_midnight()
+        species = _fetch_recent_url(base, timeout, auth, hours=hrs)
+        # Around midnight, a 1-hour fallback can include late detections from
+        # yesterday. If rows include top_at, keep only today's rows.
+        if hrs <= 1 and species:
+            today = datetime.now().strftime("%Y-%m-%d")
+            with_top_at = [s for s in species if s.get("top_at")]
+            if with_top_at:
+                species = [s for s in species if str(s.get("top_at") or "").startswith(today)]
+        return species
     return _fetch_recent_url(base, timeout, auth, hours=max(1, int(hours)))
 
 
