@@ -59,11 +59,10 @@ def _frame_css(headline_px, eyebrow_px, lowercase, pad_top, pad_side, pad_bottom
             "display: flex !important; flex-direction: column !important; height: 100vh !important; overflow: hidden !important; }"
             ".static-head { display: none !important; }"
             ".views { position: relative !important; left: 0 !important; right: 0 !important; top: 0 !important; "
-            "transform: none !important; flex: 1 1 auto !important; height: 100% !important; min-height: 0 !important; }"
-            ".view#v0 { height: 100% !important; flex: 1 1 auto !important; padding: 0 !important; overflow: hidden !important; }"
-            ".gcollage { max-width: none !important; }"
+            "transform: none !important; flex: 1 1 auto !important; height: 100% !important; min-height: 0 !important; display: flex !important; align-items: center !important; justify-content: center !important; }"
+            ".view#v0 { height: 100% !important; flex: 1 1 auto !important; padding: 0 !important; overflow: hidden !important; display: flex !important; align-items: center !important; justify-content: center !important; }"
+            ".gcollage { max-width: none !important; display: flex !important; align-items: center !important; justify-content: center !important; transform: scale(1.4) !important; transform-origin: center center !important; width: calc(100% / 1.4) !important; height: calc(100% / 1.4) !important; }"
             ".gcollage, .gcollage * { max-height: 100% !important; }"
-            ".gcollage { transform: scale(1.2) !important; transform-origin: center center !important; width: calc(100% / 1.2) !important; height: calc(100% / 1.2) !important; }"
             ".gcollage img { width: auto !important; height: auto !important; max-width: 100% !important; max-height: 100% !important; }"
         )
         return css

@@ -351,7 +351,7 @@ def _shoot_kwargs(cfg):
         # let the collage occupy the whole capture, slightly oversized.
         look["headline_px"] = 0
         look["eyebrow_px"] = 0
-        look["collage_vh"] = 120
+        look["collage_vh"] = 140
         look["title_gap_px"] = 0
         look["mat"] = 0.0
         look["pad_top_px"] = 0
