@@ -348,10 +348,10 @@ def _shoot_kwargs(cfg):
     }
     if _normalize_layout_mode(cfg.get("layout_mode", "framed")) == "full":
         # Temporary collage-only test mode: remove the text block entirely and
-        # let the collage occupy the whole capture.
+        # let the collage occupy the whole capture, slightly oversized.
         look["headline_px"] = 0
         look["eyebrow_px"] = 0
-        look["collage_vh"] = 100
+        look["collage_vh"] = 120
         look["title_gap_px"] = 0
         look["mat"] = 0.0
         look["pad_top_px"] = 0

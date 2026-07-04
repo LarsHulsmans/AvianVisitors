@@ -63,6 +63,7 @@ def _frame_css(headline_px, eyebrow_px, lowercase, pad_top, pad_side, pad_bottom
             ".view#v0 { height: 100% !important; flex: 1 1 auto !important; padding: 0 !important; overflow: hidden !important; }"
             ".gcollage { max-width: none !important; }"
             ".gcollage, .gcollage * { max-height: 100% !important; }"
+            ".gcollage { transform: scale(1.2) !important; transform-origin: center center !important; width: calc(100% / 1.2) !important; height: calc(100% / 1.2) !important; }"
             ".gcollage img { width: auto !important; height: auto !important; max-width: 100% !important; max-height: 100% !important; }"
         )
         return css
