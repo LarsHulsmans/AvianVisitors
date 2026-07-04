@@ -48,10 +48,14 @@ DEFAULTS = {
     "hours": 24,
     "window_mode": "24h",   # "24h" (rolling) or "today" (since local midnight)
     "toggle_button": "a",   # Inky button (a/b/c/d) checked each run; hold to toggle mode
+    "status_text_24h": "24H",      # top-right status label when mode is 24h
+    "status_text_today": "TODAY",  # top-right status label when mode is today
     "image": "",            # local PNG written by the shooter
     "image_url": "",        # or a published screenshot URL
     "shoot": False,         # or capture inline (needs a browser; the Zero 2 W handles it)
     "shoot_title": None, "shoot_subtitle": None,
+    "shoot_subtitle_24h": None,    # optional mode override for large headline text
+    "shoot_subtitle_today": None,  # optional mode override for large headline text
     "shoot_headline_px": 42, "shoot_eyebrow_px": 18, "shoot_lowercase": False,
     "shoot_mat": 0.04, "shoot_small_floor": 0.04, "shoot_count_exp": 0.65,
     "mat": 0.0,             # extra global shrink of the content inside the A5 opening
@@ -299,7 +303,9 @@ def _status_label(cfg):
     if cfg.get("species_source") == "birdweather":
         return ""
     mode = _normalize_window_mode(cfg.get("_window_mode", cfg.get("window_mode", "24h")))
-    return "TODAY" if mode == "today" else "24H"
+    if mode == "today":
+        return str(cfg.get("status_text_today", "TODAY") or "")
+    return str(cfg.get("status_text_24h", "24H") or "")
 
 
 def _draw_status_label(img, text):
@@ -394,6 +400,15 @@ def in_quiet_hours(cfg, hour):
     return s <= hour < e if s < e else hour >= s or hour < e
 
 
+def _mode_subtitle(cfg):
+    mode = _normalize_window_mode(cfg.get("_window_mode", cfg.get("window_mode", "24h")))
+    if mode == "today":
+        override = cfg.get("shoot_subtitle_today")
+    else:
+        override = cfg.get("shoot_subtitle_24h")
+    return cfg.get("shoot_subtitle") if override is None else override
+
+
 # --- run --------------------------------------------------------------------
 def obtain_image(cfg, species=None):
     if cfg.get("species_source") == "birdweather":
@@ -402,7 +417,7 @@ def obtain_image(cfg, species=None):
             species = fetch_species(cfg, _auth(cfg))
         out = os.path.join(os.path.expanduser(cfg["cache"]), "frame.png")
         os.makedirs(os.path.dirname(out), exist_ok=True)
-        shoot_birdweather(out, species, title=cfg["shoot_title"], subtitle=cfg["shoot_subtitle"],
+        shoot_birdweather(out, species, title=cfg["shoot_title"], subtitle=_mode_subtitle(cfg),
                           timeout_ms=cfg["timeout"] * 1000)
         return Image.open(out).convert("RGB")
     if cfg["shoot"]:
@@ -410,7 +425,7 @@ def obtain_image(cfg, species=None):
         out = os.path.join(os.path.expanduser(cfg["cache"]), "shot.png")
         os.makedirs(os.path.dirname(out), exist_ok=True)
         mode = _normalize_window_mode(cfg.get("_window_mode", cfg.get("window_mode", "24h")))
-        shoot(cfg["base_url"], out, title=cfg["shoot_title"], subtitle=cfg["shoot_subtitle"],
+          shoot(cfg["base_url"], out, title=cfg["shoot_title"], subtitle=_mode_subtitle(cfg),
               headline_px=cfg["shoot_headline_px"], eyebrow_px=cfg["shoot_eyebrow_px"],
               lowercase=cfg["shoot_lowercase"], mat=cfg["shoot_mat"],
               small_floor=cfg["shoot_small_floor"], count_exp=cfg["shoot_count_exp"], timeout_ms=cfg["timeout"] * 1000,
