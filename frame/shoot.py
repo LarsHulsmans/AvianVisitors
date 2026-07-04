@@ -57,17 +57,14 @@ def _frame_css(headline_px, eyebrow_px, lowercase, pad_top, pad_side, pad_bottom
         css = (
             ".stage { position: relative !important; padding: 0 !important; box-sizing: border-box !important; "
             "display: flex !important; flex-direction: column !important; height: 100vh !important; overflow: hidden !important; }"
-            ".static-head { position: relative !important; z-index: 5; flex: 0 0 auto !important; "
-            "padding: 16px 20px 8px !important; box-sizing: border-box !important; }"
-            f".static-head .pre {{ font-size: {eyebrow_px}px !important; }}"
-            f".static-head h1 {{ font-size: {headline_px}px !important; }}"
+            ".static-head { display: none !important; }"
             ".views { position: relative !important; left: 0 !important; right: 0 !important; top: 0 !important; "
-            "transform: none !important; flex: 1 1 auto !important; height: auto !important; min-height: 0 !important; }"
+            "transform: none !important; flex: 1 1 auto !important; height: 100% !important; min-height: 0 !important; }"
             ".view#v0 { height: 100% !important; flex: 1 1 auto !important; padding: 0 !important; overflow: hidden !important; }"
             ".gcollage { max-width: none !important; }"
+            ".gcollage, .gcollage * { max-height: 100% !important; }"
+            ".gcollage img { width: auto !important; height: auto !important; max-width: 100% !important; max-height: 100% !important; }"
         )
-        if lowercase:
-            css += ".static-head h1 { text-transform: none !important; }"
         return css
     if collage_lock_center:
         # Keep collage centered independently of title placement. Title can then
