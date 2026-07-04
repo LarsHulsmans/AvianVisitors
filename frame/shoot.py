@@ -72,7 +72,20 @@ def _safe_continue(route):
         pass
 
 
-def _make_api_handler(floor_frac, window_hours, auth, species=None):
+def _rewrite_recent_url(url, window_hours=None, window_today=False):
+    p = urllib.parse.urlparse(url)
+    q = urllib.parse.parse_qs(p.query, keep_blank_values=True)
+    if window_today:
+        q["today"] = ["1"]
+        q.pop("hours", None)
+    elif window_hours:
+        q["hours"] = [str(int(window_hours))]
+        q.pop("today", None)
+    query = urllib.parse.urlencode(q, doseq=True)
+    return urllib.parse.urlunparse((p.scheme, p.netloc, p.path, p.params, query, p.fragment))
+
+
+def _make_api_handler(floor_frac, window_hours, window_today, auth, species=None):
     """Re-window action=recent (to preview busy days) and floor the rarest
     counts so the packer draws them a little larger. With `species` set
     (--bird-weather), serve that list for recent and an empty body for the
@@ -87,7 +100,7 @@ def _make_api_handler(floor_frac, window_hours, auth, species=None):
             if species is not None:
                 data = {"hours": int(window_hours or 24), "species": species, "as_of": ""}
             else:
-                url = re.sub(r"hours=\d+", f"hours={int(window_hours)}", req.url) if window_hours else req.url
+                url = _rewrite_recent_url(req.url, window_hours=window_hours, window_today=window_today)
                 kw = {"url": url}
                 if auth:
                     kw["headers"] = {**req.headers, "authorization": auth}
@@ -166,6 +179,7 @@ def shoot(url, out, *, title=None, subtitle=None, vw=600, vh=800, dsf=2,
           headline_px=42, eyebrow_px=18, lowercase=False,
           mat=0.04, collage_vh=52, cluster_xbias=1.0, cluster_ybias=1.2,
           count_exp=0.4, cluster_pad=1, small_floor=0.04, window_hours=None,
+          window_today=False,
           timeout_ms=45000, user=None, password=None, species=None, cutout_base=None,
           cutout_local=None):
     pad_side, pad_top, pad_bottom = int(vw * mat), int(vh * mat * 0.92), int(vh * mat)
@@ -179,7 +193,7 @@ def shoot(url, out, *, title=None, subtitle=None, vw=600, vh=800, dsf=2,
                 ctx_kw["http_credentials"] = {"username": user, "password": password or ""}
             page = browser.new_context(**ctx_kw).new_page()
             misses = []
-            page.route("**/birdnet-api.php**", _make_api_handler(small_floor, window_hours, auth, species))
+            page.route("**/birdnet-api.php**", _make_api_handler(small_floor, window_hours, window_today, auth, species))
             page.route("**/apt.js*", _make_js_handler(cluster_xbias, cluster_ybias, count_exp, cluster_pad, auth, misses))
             if cutout_base:
                 page.route("**/cutout.php*", _make_cutout_handler(cutout_base, cutout_local))
@@ -269,6 +283,8 @@ def main():
     ap.add_argument("--cluster-pad", type=int, default=1)
     ap.add_argument("--small-floor", type=float, default=0.04)
     ap.add_argument("--window-hours", type=int)
+    ap.add_argument("--window-today", action="store_true",
+                    help="use detections since local midnight (overrides --window-hours)")
     ap.add_argument("--bird-weather", action="store_true",
                     help="render from BirdWeather data for --zip instead of a local mic")
     ap.add_argument("--zip", help="ZIP / postal code, required with --bird-weather")
@@ -298,7 +314,8 @@ def main():
         look.update(vw=a.width, vh=a.height, dsf=a.dsf, mat=a.mat, collage_vh=a.collage_vh,
                     cluster_xbias=a.cluster_xbias, cluster_ybias=a.cluster_ybias,
                     cluster_pad=a.cluster_pad, small_floor=a.small_floor, lowercase=a.lowercase,
-                    window_hours=a.window_hours, user=a.user, password=a.password)
+                    window_hours=a.window_hours, window_today=a.window_today,
+                    user=a.user, password=a.password)
         try:
             shoot_birdweather(a.out, species, title=a.title, subtitle=a.subtitle,
                               timeout_ms=a.timeout, **look)
@@ -317,7 +334,8 @@ def main():
               mat=a.mat, collage_vh=a.collage_vh, cluster_xbias=a.cluster_xbias,
               cluster_ybias=a.cluster_ybias, count_exp=count_exp, cluster_pad=a.cluster_pad,
               small_floor=a.small_floor,
-              window_hours=a.window_hours, timeout_ms=a.timeout, user=a.user, password=a.password)
+              window_hours=a.window_hours, window_today=a.window_today,
+              timeout_ms=a.timeout, user=a.user, password=a.password)
     except Exception as e:
         print(f"shoot failed: {e}", file=sys.stderr)
         sys.exit(1)

@@ -19,6 +19,10 @@ export GEMINI_API_KEY='your-key'
 # 1. generate (cream ground) for your region's species
 python3 pregen.py --labels ~/BirdNET-Pi/model/labels.txt --ebird-region US-CA
 
+# add species from multiple regions (union) without replacing existing files
+python3 pregen.py --labels ~/BirdNET-Pi/model/labels.txt \
+  --ebird-region US-CA --ebird-region MX-CMX
+
 # 2. cut the ground off and crop
 python3 cutout.py
 
@@ -28,7 +32,8 @@ python3 build_masks.py
 
 `--labels` takes any `Sci|Com` per-line file (BirdNET-Pi's `labels.txt` works
 directly). `--ebird-region` filters to species actually seen in your region
-(needs `EBIRD_API_KEY`). Re-render one bird with
+(needs `EBIRD_API_KEY`) and can be repeated to union multiple regions in one run.
+Existing illustrations are skipped unless `--force` is set. Re-render one bird with
 `--species "Calypte anna|Anna's Hummingbird" --force`.
 
 ## Why a cream ground

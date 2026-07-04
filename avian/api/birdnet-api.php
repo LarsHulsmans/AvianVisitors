@@ -6,6 +6,7 @@
 //   stats       - totals (detections, unique species, today, last hour)
 //   lifelist    - every species with first_seen, last_seen, total_count
 //   recent      - &hours=N (default 24): species heard in the window
+//                 &today=1: species heard since local midnight
 //   species     - &sci=<sci_name>: per-species detail page
 //   timeseries  - &days=N: daily detection counts per species
 //   firstseen   - every species' earliest detection
@@ -96,15 +97,19 @@ switch ($action) {
         // "ALL" button can turn off the time filter without needing a
         // separate code path.
         $hours = max(1, min(1000000, (int)($_GET['hours'] ?? 24)));
+        $today = (int)($_GET['today'] ?? 0) === 1;
+        $whereWindow = $today
+            ? "Date = DATE('now','localtime')"
+            : "(julianday('now','localtime') - julianday(Date||' '||Time)) * 24 <= :hrs";
         // species-collapsed view: one row per species seen in the window,
         // with the file of its highest-confidence detection inside the window.
         $rs = rows($db,
           "SELECT Sci_Name AS sci, Com_Name AS com, COUNT(*) AS n, MAX(Confidence) AS best_conf, "
         . "       MAX(Date||' '||Time) AS last_seen "
         . "FROM detections "
-        . "WHERE (julianday('now','localtime') - julianday(Date||' '||Time)) * 24 <= :hrs "
+        . "WHERE " . $whereWindow . " "
         . "GROUP BY Sci_Name ORDER BY last_seen DESC",
-          [':hrs' => $hours]
+          $today ? [] : [':hrs' => $hours]
         );
         // for each row, attach the file of the top-confidence detection in the window
         foreach ($rs as &$r) {
@@ -112,14 +117,14 @@ switch ($action) {
               "SELECT File_Name AS file, Date AS d, Time AS t, Confidence AS conf "
             . "FROM detections "
             . "WHERE Sci_Name = :sn "
-            . "AND (julianday('now','localtime') - julianday(Date||' '||Time)) * 24 <= :hrs "
+            . "AND " . $whereWindow . " "
             . "ORDER BY Confidence DESC LIMIT 1",
-              [':sn' => $r['sci'], ':hrs' => $hours]
+              $today ? [':sn' => $r['sci']] : [':sn' => $r['sci'], ':hrs' => $hours]
             );
             $r['top_file'] = $best['file'] ?? null;
             $r['top_at']   = isset($best['d']) ? ($best['d'].' '.$best['t']) : null;
         }
-        echo json_encode(['hours' => $hours, 'species' => $rs, 'as_of' => date('c')]);
+        echo json_encode(['hours' => $hours, 'today' => $today, 'species' => $rs, 'as_of' => date('c')]);
         break;
     }
 

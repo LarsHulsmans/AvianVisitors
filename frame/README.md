@@ -65,6 +65,16 @@ Pick how the frame gets its birds:
 
 Each one enables SPI + I2C, installs the deps and a systemd timer, writes `~/.birdframe/config.toml`, and reboots once to bring SPI up. Full options live in [`config.example.toml`](config.example.toml).
 
+The frame window can be either a rolling last-24h view or strict local-today
+(since 00:00): set `window_mode = "24h"` or `window_mode = "today"` in
+`~/.birdframe/config.toml`. A tiny top-right label on the frame shows `24H` or
+`TODAY` so you can see the active mode at a glance.
+
+You can also map one Inky button to toggle the mode: set
+`toggle_button = "a"` (or `b`, `c`, `d`). Because the updater runs on a
+systemd timer, hold the button while a refresh is running (or while you start
+`birdframe.service`) to flip modes.
+
 BirdWeather mode renders on the Pi from this repo's illustrations on GitHub, so there is no image set to copy over. ZIP codes with no station nearby fall back to the closest ones. If you are far from any BirdWeather station, add `--ebird-key <key>` (a free key from [ebird.org/api/keygen](https://ebird.org/api/keygen)) and the frame fills from eBird sightings instead.
 
 The bundled illustrations center on the western U.S. If birds near your ZIP aren't in the set you cloned, the installer flags them and the frame skips them until they exist. To generate them, run [`generate_illustrations.py`](generate_illustrations.py) on a laptop or workstation (it uses the same rembg cutout as the rest of the pipeline, which the Pi can't fit in memory), passing your ZIP and a paid Google Gemini key, then commit the new cutouts or copy them to the Pi:

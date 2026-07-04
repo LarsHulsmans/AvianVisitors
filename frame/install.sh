@@ -118,6 +118,8 @@ elif [ "$MODE" = local ]; then
 # AvianVisitors frame, local mode: mirrors the BirdNET-Pi on your network.
 # This Pi screenshots birdnet.local itself, so there is nothing else to set up.
 base_url = "http://birdnet.local"
+window_mode = "24h"
+# toggle_button = "a" # hold during refresh to toggle 24h/today
 shoot = true
 shoot_title = "Avian Visitors"
 shoot_subtitle = "Heard Today"
@@ -135,6 +137,7 @@ elif [ "$MODE" = image ]; then
     printf '%s\n' '# birdframe-mode: image'
     printf '%s\n' '# AvianVisitors frame, image mode: fetches a ready-made frame PNG.'
     printf 'base_url = "%s"\n' "$BASE"
+    printf '%s\n' 'window_mode = "24h"'
     printf 'image_url = "%s"\n' "$IMAGE_URL"
     printf '%s\n' 'shoot = false'
     printf '%s\n' 'rotate = 90          # flip to 270 if the frame hangs the other way up'
@@ -148,6 +151,7 @@ else
     printf '%s\n' '# AvianVisitors frame, BirdWeather mode: renders the top birds near a ZIP.'
     printf '%s\n' 'species_source = "birdweather"'
     printf 'zip = "%s"\n' "$ZIP"
+    printf '%s\n' 'window_mode = "24h"'
     printf '%s\n' 'bw_days = 7          # BirdWeather lookback window, in days'
     printf '%s\n' 'bw_country = "us"    # geocoder country for the ZIP'
     printf '%s\n' 'shoot = true         # this Pi renders the collage'

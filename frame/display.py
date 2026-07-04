@@ -23,8 +23,9 @@ import sys
 import time
 import urllib.request
 from datetime import datetime
+from urllib.parse import urlencode
 
-from PIL import Image, ImageChops, ImageDraw
+from PIL import Image, ImageChops, ImageDraw, ImageFont
 
 try:
     import tomllib
@@ -45,6 +46,8 @@ DEFAULTS = {
     "bw_days": 7,           # BirdWeather lookback window, in days
     "bw_country": "us",     # geocoder country for the ZIP
     "hours": 24,
+    "window_mode": "24h",   # "24h" (rolling) or "today" (since local midnight)
+    "toggle_button": "a",   # Inky button (a/b/c/d) checked each run; hold to toggle mode
     "image": "",            # local PNG written by the shooter
     "image_url": "",        # or a published screenshot URL
     "shoot": False,         # or capture inline (needs a browser; the Zero 2 W handles it)
@@ -62,6 +65,8 @@ DEFAULTS = {
     "timeout": 45,
     "basic_user": None, "basic_pass": None,
 }
+
+BUTTON_PINS = {"a": 5, "b": 6, "c": 16, "d": 24}
 
 
 def _auth(cfg):
@@ -83,13 +88,37 @@ def _bucket(n):
     return 8
 
 
-def fetch_recent(base, hours, timeout, auth=None):
-    url = f"{base.rstrip('/')}/avian/api/birdnet-api.php?action=recent&hours={hours}"
+def _normalize_window_mode(mode):
+    mode = str(mode or "24h").strip().lower()
+    return "today" if mode == "today" else "24h"
+
+
+def _hours_since_midnight(now_local=None):
+    now_local = now_local or datetime.now()
+    midnight = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+    secs = max(0, (now_local - midnight).total_seconds())
+    # API expects integer hours. Round up so 00:01 still means "today".
+    return max(1, int((secs + 3599) // 3600))
+
+
+def _fetch_recent_url(base, timeout, auth=None, **params):
+    url = f"{base.rstrip('/')}/avian/api/birdnet-api.php?{urlencode({**params, 'action': 'recent'})}"
     req = urllib.request.Request(url, headers={"User-Agent": "AvianVisitors-frame/1.0"})
     if auth:
         req.add_header("Authorization", auth)
     with urllib.request.urlopen(req, timeout=timeout) as r:
         return json.loads(r.read(2_000_000)).get("species", [])
+
+
+def fetch_recent(base, hours, timeout, auth=None, window_mode="24h"):
+    mode = _normalize_window_mode(window_mode)
+    if mode == "today":
+        try:
+            return _fetch_recent_url(base, timeout, auth, today=1)
+        except Exception:
+            # Backward compatibility for older API deployments without today=1.
+            return _fetch_recent_url(base, timeout, auth, hours=_hours_since_midnight())
+    return _fetch_recent_url(base, timeout, auth, hours=max(1, int(hours)))
 
 
 def signature(species):
@@ -104,7 +133,8 @@ def fetch_species(cfg, auth=None):
     if cfg.get("species_source") == "birdweather":
         import birdweather
         return birdweather.species_for_zip(cfg["zip"], country=cfg["bw_country"], days=cfg["bw_days"])
-    return fetch_recent(cfg["base_url"], cfg["hours"], cfg["timeout"], auth)
+    return fetch_recent(cfg["base_url"], cfg["hours"], cfg["timeout"], auth,
+                        window_mode=cfg.get("_window_mode", cfg.get("window_mode", "24h")))
 
 
 # --- image ------------------------------------------------------------------
@@ -265,6 +295,29 @@ def _draw_mat_box(img):
                                   outline=(170, 60, 56), width=2)
 
 
+def _status_label(cfg):
+    if cfg.get("species_source") == "birdweather":
+        return ""
+    mode = _normalize_window_mode(cfg.get("_window_mode", cfg.get("window_mode", "24h")))
+    return "TODAY" if mode == "today" else "24H"
+
+
+def _draw_status_label(img, text):
+    if not text:
+        return
+    draw = ImageDraw.Draw(img)
+    font = ImageFont.load_default()
+    # Draw a tiny, quiet mode chip in the top-right so the user can confirm
+    # today's calendar window vs rolling last-24h at a glance.
+    x0, y0, x1, y1 = draw.textbbox((0, 0), text, font=font)
+    tw, th = x1 - x0, y1 - y0
+    pad = 4
+    right, top = img.width - 12, 8
+    box = (right - tw - 2 * pad, top, right, top + th + 2 * pad)
+    draw.rectangle(box, fill=(236, 234, 223))
+    draw.text((box[0] + pad, box[1] + pad), text, font=font, fill=(70, 70, 70))
+
+
 # --- hardware ---------------------------------------------------------------
 def push_panel(img, rotate, saturation, panel=""):
     """Rotate to the panel's landscape buffer and push. Lazy import so this
@@ -292,18 +345,53 @@ def load_state(path):
         with open(os.path.expanduser(path)) as f:
             return json.load(f)
     except Exception:
-        return {"signature": None, "last_refresh": 0}
+        return {"signature": None, "last_refresh": 0, "window_mode": None, "last_toggle": 0}
 
 
-def save_state(path, sig, when):
+def save_state(path, sig, when, state=None):
+    state = state or {}
     path = os.path.expanduser(path)
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
     tmp = path + ".tmp"
+    payload = {
+        "signature": sig,
+        "last_refresh": when,
+        "window_mode": state.get("window_mode"),
+        "last_toggle": state.get("last_toggle", 0),
+    }
     with open(tmp, "w") as f:
-        json.dump({"signature": sig, "last_refresh": when}, f)
+        json.dump(payload, f)
         f.flush()
         os.fsync(f.fileno())
     os.replace(tmp, path)  # atomic: a power cut can't leave a half-written file
+
+
+def _apply_button_toggle(cfg, state):
+    cur = _normalize_window_mode(state.get("window_mode") or cfg.get("window_mode", "24h"))
+    state["window_mode"] = cur
+    btn = str(cfg.get("toggle_button") or "").strip().lower()
+    if btn not in BUTTON_PINS:
+        return cur
+    try:
+        from gpiozero import Button
+    except Exception:
+        return cur
+
+    button = Button(BUTTON_PINS[btn], pull_up=True, bounce_time=0.05)
+    try:
+        if not button.is_pressed:
+            return cur
+    finally:
+        button.close()
+
+    now = time.time()
+    if now - float(state.get("last_toggle") or 0) < 2:
+        return cur
+    nxt = "today" if cur == "24h" else "24h"
+    state["window_mode"] = nxt
+    state["last_toggle"] = now
+    print(f"window mode toggled to {nxt} via button {btn.upper()}")
+    return nxt
 
 
 def in_quiet_hours(cfg, hour):
@@ -328,10 +416,13 @@ def obtain_image(cfg, species=None):
         from shoot import shoot
         out = os.path.join(os.path.expanduser(cfg["cache"]), "shot.png")
         os.makedirs(os.path.dirname(out), exist_ok=True)
+        mode = _normalize_window_mode(cfg.get("_window_mode", cfg.get("window_mode", "24h")))
         shoot(cfg["base_url"], out, title=cfg["shoot_title"], subtitle=cfg["shoot_subtitle"],
               headline_px=cfg["shoot_headline_px"], eyebrow_px=cfg["shoot_eyebrow_px"],
               lowercase=cfg["shoot_lowercase"], mat=cfg["shoot_mat"],
               small_floor=cfg["shoot_small_floor"], count_exp=cfg["shoot_count_exp"], timeout_ms=cfg["timeout"] * 1000,
+              window_hours=cfg["hours"] if mode == "24h" else None,
+              window_today=(mode == "today"),
               user=cfg["basic_user"], password=cfg["basic_pass"])
         return Image.open(out).convert("RGB")
     src = cfg["image_url"] or cfg["image"]
@@ -343,6 +434,9 @@ def obtain_image(cfg, species=None):
 def run(cfg, preview=None, force=False, use_signature=True, mat_box=False):
     now = time.time()
     state = load_state(cfg["state"])
+    before_mode = _normalize_window_mode(state.get("window_mode") or cfg.get("window_mode", "24h"))
+    cfg["_window_mode"] = _apply_button_toggle(cfg, state)
+    toggled = cfg["_window_mode"] != before_mode
     sig = None
     species = None
     if use_signature:
@@ -352,7 +446,7 @@ def run(cfg, preview=None, force=False, use_signature=True, mat_box=False):
         except Exception as e:
             print(f"signature fetch failed: {e}", file=sys.stderr)  # treat as no change
     heal_due = now - state.get("last_refresh", 0) >= cfg["heal_hours"] * 3600
-    changed = (not use_signature) or (sig is not None and sig != state.get("signature"))
+    changed = toggled or (not use_signature) or (sig is not None and sig != state.get("signature"))
     if not force and not preview:
         if in_quiet_hours(cfg, datetime.now().hour):
             print("quiet hours; skip")
@@ -360,27 +454,34 @@ def run(cfg, preview=None, force=False, use_signature=True, mat_box=False):
         if not changed and not heal_due:
             print("no change; skip")
             return
-        print("refresh:", "changed" if changed else "heal")
+        if toggled:
+            print("refresh: mode toggled")
+        else:
+            print("refresh:", "changed" if changed else "heal")
 
     try:
         img = fit_panel(obtain_image(cfg, species))
     except Exception as e:
         print(f"could not get image: {e}", file=sys.stderr)  # keep last panel image
+        save_state(cfg["state"], state.get("signature"), state.get("last_refresh", 0), state)
         return
     img = mat_and_center(img, cfg["mat"], empty=(species == []))
+    _draw_status_label(img, _status_label(cfg))
     if preview:
         out = quantize_spectra6(img)
         if mat_box:
             _draw_mat_box(out)
         out.save(preview)
         print(f"wrote preview {preview}")
+        save_state(cfg["state"], state.get("signature"), state.get("last_refresh", 0), state)
         return
     try:
         push_panel(img, cfg["rotate"], cfg["saturation"], cfg.get("panel", ""))
     except Exception as e:
         print(f"panel push failed: {e}", file=sys.stderr)
+        save_state(cfg["state"], state.get("signature"), state.get("last_refresh", 0), state)
         return
-    save_state(cfg["state"], sig if sig is not None else state.get("signature"), now)
+    save_state(cfg["state"], sig if sig is not None else state.get("signature"), now, state)
     print("panel updated")
 
 
@@ -389,6 +490,7 @@ def load_config(path):
     if path:
         with open(os.path.expanduser(path), "rb") as f:
             cfg.update(tomllib.load(f))
+    cfg["window_mode"] = _normalize_window_mode(cfg.get("window_mode", "24h"))
     return cfg
 
 

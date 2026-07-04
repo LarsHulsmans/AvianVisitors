@@ -44,6 +44,11 @@ Usage:
     python3 pregen.py --labels ~/BirdNET-Pi/model/labels.txt \\
                       --ebird-region US-CA --ebird-key YOUR_KEY
 
+    # Add species from multiple regions in one run (union):
+    python3 pregen.py --labels ~/BirdNET-Pi/model/labels.txt \\
+                      --ebird-region US-CA --ebird-region MX-CMX \\
+                      --ebird-key YOUR_KEY
+
     # Re-render a single species (useful after editing the prompt):
     python3 pregen.py --species "Calypte anna|Anna's Hummingbird" --force
 
@@ -251,13 +256,16 @@ def load_prompt(path: Path) -> str:
     return (m.group(1) if m else text).strip()
 
 
-def ebird_filter(species, region: str, key: str):
-    """Intersect a label set with the eBird species list for a region.
-    Region codes: US-CA (state), US-CA-085 (county)."""
-    url = f"https://api.ebird.org/v2/product/spplist/{region}"
-    req = urllib.request.Request(url, headers={"X-eBirdApiToken": key})
-    with urllib.request.urlopen(req, timeout=30) as r:
-        ebird_codes = set(json.loads(r.read()))
+def ebird_filter(species, regions: list[str], key: str):
+    """Intersect a label set with the union of eBird region species lists.
+    Region codes: US-CA (state), US-CA-085 (county).
+    """
+    ebird_codes: set[str] = set()
+    for region in regions:
+        url = f"https://api.ebird.org/v2/product/spplist/{region}"
+        req = urllib.request.Request(url, headers={"X-eBirdApiToken": key})
+        with urllib.request.urlopen(req, timeout=30) as r:
+            ebird_codes.update(json.loads(r.read()))
     tax_url = "https://api.ebird.org/v2/ref/taxonomy/ebird?fmt=json"
     req2 = urllib.request.Request(tax_url, headers={"X-eBirdApiToken": key})
     with urllib.request.urlopen(req2, timeout=60) as r:
@@ -541,7 +549,8 @@ def main() -> int:
     src.add_argument("--species", action="append", default=[],
                      help="Manual 'Sci|Com' (repeatable)")
     src.add_argument("--stdin", action="store_true", help="Read Sci|Com lines from stdin")
-    ap.add_argument("--ebird-region", help="eBird region code (e.g. US-CA, US-CA-085) to filter labels")
+    ap.add_argument("--ebird-region", action="append", default=[],
+                    help="eBird region code to filter labels (repeatable, e.g. --ebird-region US-CA --ebird-region MX-CMX)")
     ap.add_argument("--ebird-key", help="eBird API key (or EBIRD_API_KEY env)")
     ap.add_argument("--gemini-key", help="Gemini API key (or GEMINI_API_KEY env)")
     ap.add_argument("--out", type=Path,
@@ -593,8 +602,12 @@ def main() -> int:
         if not ek:
             print("error: --ebird-region requires --ebird-key or EBIRD_API_KEY", file=sys.stderr)
             return 2
-        print(f"[ebird] filtering {len(species)} species against {args.ebird_region}...")
-        species = ebird_filter(species, args.ebird_region, ek)
+        region_list = [r.strip() for r in args.ebird_region if r.strip()]
+        if not region_list:
+            print("error: --ebird-region provided but no valid region codes found", file=sys.stderr)
+            return 2
+        print(f"[ebird] filtering {len(species)} species against {', '.join(region_list)} (union)...")
+        species = ebird_filter(species, region_list, ek)
 
     if args.limit:
         species = species[:args.limit]

@@ -72,6 +72,15 @@ python3 ~/BirdNET-Pi/avian/scripts/build_masks.py
 
 Filter to your region with `--ebird-region US-CA` (needs `EBIRD_API_KEY`). The full pipeline, prompt, reference images, and per-species tuning live in [`avian/scripts/README.md`](avian/scripts/README.md). Style lives in [`prompt.template.md`](avian/scripts/prompt.template.md).
 
+You can repeat `--ebird-region` to add species from multiple regions in one pass (union):
+
+```bash
+python3 ~/BirdNET-Pi/avian/scripts/pregen.py --labels ~/BirdNET-Pi/model/labels.txt \
+	--ebird-region US-CA --ebird-region MX-CMX
+```
+
+By default, existing illustrations are preserved (files are skipped). Use `--force` only when you want to re-render and replace existing files.
+
 ---
 
 ## 4. (Optional) Forward off your LAN
