@@ -116,6 +116,10 @@ def _normalize_layout_mode(mode):
     return "full" if mode == "full" else "framed"
 
 
+def _active_layout_mode(cfg):
+    return _normalize_layout_mode(cfg.get("_layout_mode", cfg.get("layout_mode", "framed")))
+
+
 def _hours_since_midnight(now_local=None):
     now_local = now_local or datetime.now()
     midnight = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -328,7 +332,7 @@ def _status_label(cfg):
 
 
 def _layout_image(cfg, img, species):
-    mode = _normalize_layout_mode(cfg.get("layout_mode", "framed"))
+    mode = _active_layout_mode(cfg)
     if mode == "full":
         return img
     return mat_and_center(img, cfg["mat"], empty=(species == []))
@@ -349,7 +353,7 @@ def _shoot_kwargs(cfg):
         "pad_side_px": cfg["shoot_pad_side_px"],
         "pad_bottom_px": cfg["shoot_pad_bottom_px"],
     }
-    if _normalize_layout_mode(cfg.get("layout_mode", "framed")) == "full":
+    if _active_layout_mode(cfg) == "full":
         # Temporary overlay test mode: keep the collage oversized and put the
         # title back above it, pinned near the top.
         look["headline_px"] = max(24, round(look["headline_px"] * 0.9))
@@ -619,6 +623,9 @@ def load_config(path):
             cfg.update(tomllib.load(f))
     cfg["window_mode"] = _normalize_window_mode(cfg.get("window_mode", "24h"))
     cfg["layout_mode"] = _normalize_layout_mode(cfg.get("layout_mode", "framed"))
+    # Lock layout mode at process start so button-based window toggles can
+    # never drift fullscreen runs back to framed until the service restarts.
+    cfg["_layout_mode"] = cfg["layout_mode"]
     return cfg
 
 
