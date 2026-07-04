@@ -372,6 +372,15 @@ def _apply_button_toggle(cfg, state):
     btn = str(cfg.get("toggle_button") or "").strip().lower()
     if btn not in BUTTON_PINS:
         return cur
+    if cfg.get("_button_pressed"):
+        now = time.time()
+        if now - float(state.get("last_toggle") or 0) < 2:
+            return cur
+        nxt = "today" if cur == "24h" else "24h"
+        state["window_mode"] = nxt
+        state["last_toggle"] = now
+        print(f"window mode toggled to {nxt} via button {btn.upper()}")
+        return nxt
     try:
         from gpiozero import Button
     except Exception:
@@ -436,6 +445,7 @@ def run(cfg, preview=None, force=False, use_signature=True, mat_box=False):
     state = load_state(cfg["state"])
     before_mode = _normalize_window_mode(state.get("window_mode") or cfg.get("window_mode", "24h"))
     cfg["_window_mode"] = _apply_button_toggle(cfg, state)
+    cfg.pop("_button_pressed", None)
     toggled = cfg["_window_mode"] != before_mode
     sig = None
     species = None
@@ -501,6 +511,7 @@ def watch_button(cfg):
             button.wait_for_press()
             # Run immediately while the button is still down; run() will also
             # toggle the 24h/today mode and force a redraw path for that change.
+            cfg["_button_pressed"] = True
             run(cfg, force=True, use_signature=True)
             button.wait_for_release(timeout=2)
     finally:
