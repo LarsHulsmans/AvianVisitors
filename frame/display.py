@@ -347,14 +347,16 @@ def _shoot_kwargs(cfg):
         "pad_bottom_px": cfg["shoot_pad_bottom_px"],
     }
     if _normalize_layout_mode(cfg.get("layout_mode", "framed")) == "full":
-        look["headline_px"] = round(look["headline_px"] * 1.12)
-        look["eyebrow_px"] = round(look["eyebrow_px"] * 1.08)
-        look["collage_vh"] = min(92, round(look["collage_vh"] * 1.12))
-        look["title_gap_px"] = max(4, round(look["title_gap_px"] * 0.75))
+        # Keep the framed layout, but make the title chrome smaller and give the
+        # collage more vertical room so full mode reads as a larger framed view.
+        look["headline_px"] = max(24, round(look["headline_px"] * 0.82))
+        look["eyebrow_px"] = max(12, round(look["eyebrow_px"] * 0.88))
+        look["collage_vh"] = min(88, round(look["collage_vh"] * 1.22))
+        look["title_gap_px"] = max(4, round(look["title_gap_px"] * 0.6))
         look["mat"] = max(0.0, look["mat"] * 0.5)
-        look["pad_top_px"] = max(0, round((look["pad_top_px"] or 0) * 0.5))
-        look["pad_bottom_px"] = max(0, round((look["pad_bottom_px"] or 0) * 0.5))
-        look["pad_side_px"] = max(0, round((look["pad_side_px"] or 0) * 0.5))
+        look["pad_top_px"] = max(10, round((look["pad_top_px"] or 0) * 0.7))
+        look["pad_side_px"] = max(8, round((look["pad_side_px"] or 0) * 0.75))
+        look["pad_bottom_px"] = max(8, round((look["pad_bottom_px"] or 0) * 0.75))
     return look
 
 
