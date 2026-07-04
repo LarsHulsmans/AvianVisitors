@@ -609,8 +609,14 @@ def watch_button(cfg):
             # Run immediately while the button is still down; run() will also
             # toggle the 24h/today mode and force a redraw path for that change.
             print(f"button {btn.upper()} pressed; refreshing now")
-            cfg["_button_pressed"] = True
-            run(cfg, force=True, use_signature=False)
+            run_cfg = cfg
+            if cfg.get("_config_path"):
+                # The watcher is long-lived; reload config each press so layout
+                # and look changes in config.toml apply without a service restart.
+                run_cfg = load_config(cfg.get("_config_path"))
+                run_cfg["_config_path"] = cfg.get("_config_path")
+            run_cfg["_button_pressed"] = True
+            run(run_cfg, force=True, use_signature=False)
             if stop_requested:
                 break
             button.wait_for_release(timeout=2)
@@ -653,6 +659,7 @@ def main():
     args = ap.parse_args()
 
     cfg = load_config(args.config)
+    cfg["_config_path"] = args.config
     for key in ("base_url", "image", "image_url"):
         val = getattr(args, key)
         if val:
