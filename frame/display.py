@@ -66,6 +66,7 @@ DEFAULTS = {
     "shoot_title_detached": False,
     "shoot_title_offset_y_px": 0,
     "shoot_full_y_shift_px": 0,
+    "shoot_full_collage_vh": 140,
     "shoot_pad_top_px": None,
     "shoot_pad_side_px": None,
     "shoot_pad_bottom_px": None,
@@ -352,7 +353,7 @@ def _shoot_kwargs(cfg):
         # title back above it, pinned near the top.
         look["headline_px"] = max(24, round(look["headline_px"] * 0.9))
         look["eyebrow_px"] = max(12, round(look["eyebrow_px"] * 0.9))
-        look["collage_vh"] = 140
+        look["full_collage_vh"] = cfg.get("shoot_full_collage_vh", 140)
         look["title_gap_px"] = 0
         look["mat"] = 0.0
         look["pad_top_px"] = 70
@@ -480,6 +481,7 @@ def obtain_image(cfg, species=None):
                           title_detached=look["title_detached"],
                           title_offset_y_px=look["title_offset_y_px"],
                           full_y_shift_px=look.get("full_y_shift_px", 0),
+                          full_collage_vh=look.get("full_collage_vh", 140),
                           pad_top_px=look["pad_top_px"], pad_side_px=look["pad_side_px"],
                           pad_bottom_px=look["pad_bottom_px"],
                           timeout_ms=cfg["timeout"] * 1000)
@@ -498,6 +500,7 @@ def obtain_image(cfg, species=None):
               title_detached=look["title_detached"],
               title_offset_y_px=look["title_offset_y_px"],
               full_y_shift_px=look.get("full_y_shift_px", 0),
+              full_collage_vh=look.get("full_collage_vh", 140),
               pad_top_px=look["pad_top_px"], pad_side_px=look["pad_side_px"],
               pad_bottom_px=look["pad_bottom_px"],
               small_floor=cfg["shoot_small_floor"], count_exp=cfg["shoot_count_exp"], timeout_ms=cfg["timeout"] * 1000,
