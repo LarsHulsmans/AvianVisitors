@@ -347,14 +347,14 @@ def _shoot_kwargs(cfg):
         "pad_bottom_px": cfg["shoot_pad_bottom_px"],
     }
     if _normalize_layout_mode(cfg.get("layout_mode", "framed")) == "full":
-        # Temporary collage-only test mode: remove the text block entirely and
-        # let the collage occupy the whole capture, slightly oversized.
-        look["headline_px"] = 0
-        look["eyebrow_px"] = 0
+        # Temporary overlay test mode: keep the collage oversized and put the
+        # title back above it, pinned near the top.
+        look["headline_px"] = max(24, round(look["headline_px"] * 0.9))
+        look["eyebrow_px"] = max(12, round(look["eyebrow_px"] * 0.9))
         look["collage_vh"] = 140
         look["title_gap_px"] = 0
         look["mat"] = 0.0
-        look["pad_top_px"] = 0
+        look["pad_top_px"] = 100
         look["pad_side_px"] = 0
         look["pad_bottom_px"] = 0
     return look
