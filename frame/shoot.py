@@ -182,11 +182,14 @@ def shoot(url, out, *, title=None, subtitle=None, vw=600, vh=800, dsf=2,
           headline_px=42, eyebrow_px=18, lowercase=False,
           mat=0.04, collage_vh=52, title_gap_px=14, cluster_xbias=1.0, cluster_ybias=1.2,
           group_y="center",
+        pad_top_px=None, pad_side_px=None, pad_bottom_px=None,
           count_exp=0.4, cluster_pad=1, small_floor=0.04, window_hours=None,
           window_today=False,
           timeout_ms=45000, user=None, password=None, species=None, cutout_base=None,
           cutout_local=None):
-    pad_side, pad_top, pad_bottom = int(vw * mat), int(vh * mat * 0.92), int(vh * mat)
+    pad_side = int(vw * mat) if pad_side_px is None else max(0, int(pad_side_px))
+    pad_top = int(vh * mat * 0.92) if pad_top_px is None else max(0, int(pad_top_px))
+    pad_bottom = int(vh * mat) if pad_bottom_px is None else max(0, int(pad_bottom_px))
     auth = "Basic " + base64.b64encode(f"{user}:{password or ''}".encode()).decode() if user else None
 
     with sync_playwright() as p:
@@ -285,6 +288,12 @@ def main():
                     help="bottom padding under the title block; lower = smaller title-to-collage gap")
     ap.add_argument("--group-y", default="center", choices=["center", "top", "bottom"],
                     help="vertical placement of the title+collage group")
+    ap.add_argument("--pad-top-px", type=int,
+                    help="override stage top padding in pixels")
+    ap.add_argument("--pad-side-px", type=int,
+                    help="override stage side padding in pixels")
+    ap.add_argument("--pad-bottom-px", type=int,
+                    help="override stage bottom padding in pixels")
     ap.add_argument("--cluster-xbias", type=float, default=1.0)
     ap.add_argument("--cluster-ybias", type=float, default=1.2)
     ap.add_argument("--count-exp", type=float, default=None,
@@ -323,6 +332,7 @@ def main():
         look.update(vw=a.width, vh=a.height, dsf=a.dsf, mat=a.mat, collage_vh=a.collage_vh,
                     title_gap_px=a.title_gap_px,
                     group_y={"top": "flex-start", "center": "center", "bottom": "flex-end"}[a.group_y],
+                    pad_top_px=a.pad_top_px, pad_side_px=a.pad_side_px, pad_bottom_px=a.pad_bottom_px,
                     cluster_xbias=a.cluster_xbias, cluster_ybias=a.cluster_ybias,
                     cluster_pad=a.cluster_pad, small_floor=a.small_floor, lowercase=a.lowercase,
                     window_hours=a.window_hours, window_today=a.window_today,
@@ -344,6 +354,7 @@ def main():
               headline_px=headline_px, eyebrow_px=eyebrow_px, lowercase=a.lowercase,
               mat=a.mat, collage_vh=a.collage_vh, title_gap_px=a.title_gap_px,
               group_y={"top": "flex-start", "center": "center", "bottom": "flex-end"}[a.group_y],
+              pad_top_px=a.pad_top_px, pad_side_px=a.pad_side_px, pad_bottom_px=a.pad_bottom_px,
               cluster_xbias=a.cluster_xbias,
               cluster_ybias=a.cluster_ybias, count_exp=count_exp, cluster_pad=a.cluster_pad,
               small_floor=a.small_floor,

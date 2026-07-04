@@ -61,12 +61,18 @@ DEFAULTS = {
     "shoot_collage_vh": 52,
     "shoot_title_gap_px": 14,
     "shoot_group_y": "center",      # flex-start | center | flex-end
+    "shoot_pad_top_px": None,
+    "shoot_pad_side_px": None,
+    "shoot_pad_bottom_px": None,
     "shoot_mat_full": 0.0,         # when layout_mode=full, remove stage padding
     "shoot_collage_vh_full": 84,   # when layout_mode=full, make collage dominate
     "shoot_headline_px_full": 32,  # when layout_mode=full, keep title compact
     "shoot_eyebrow_px_full": 14,
     "shoot_title_gap_px_full": 6,
     "shoot_group_y_full": "center",  # flex-start | center | flex-end
+    "shoot_pad_top_px_full": 56,
+    "shoot_pad_side_px_full": 0,
+    "shoot_pad_bottom_px_full": 0,
     "layout_mode": "framed",  # "framed" (A5 mat layout) or "full" (edge-to-edge panel)
     "mat": 0.0,             # extra global shrink of the content inside the A5 opening
     "rotate": 90,           # 90 or 270 if the frame hangs the other way up
@@ -340,6 +346,9 @@ def _shoot_kwargs(cfg):
             "collage_vh": cfg["shoot_collage_vh_full"],
             "title_gap_px": cfg["shoot_title_gap_px_full"],
             "group_y": cfg["shoot_group_y_full"],
+            "pad_top_px": cfg["shoot_pad_top_px_full"],
+            "pad_side_px": cfg["shoot_pad_side_px_full"],
+            "pad_bottom_px": cfg["shoot_pad_bottom_px_full"],
         }
     return {
         "headline_px": cfg["shoot_headline_px"],
@@ -348,6 +357,9 @@ def _shoot_kwargs(cfg):
         "collage_vh": cfg["shoot_collage_vh"],
         "title_gap_px": cfg["shoot_title_gap_px"],
         "group_y": cfg["shoot_group_y"],
+        "pad_top_px": cfg["shoot_pad_top_px"],
+        "pad_side_px": cfg["shoot_pad_side_px"],
+        "pad_bottom_px": cfg["shoot_pad_bottom_px"],
     }
 
 
@@ -465,6 +477,8 @@ def obtain_image(cfg, species=None):
                           headline_px=look["headline_px"], eyebrow_px=look["eyebrow_px"],
                           mat=look["mat"], collage_vh=look["collage_vh"],
                           title_gap_px=look["title_gap_px"], group_y=look["group_y"],
+                          pad_top_px=look["pad_top_px"], pad_side_px=look["pad_side_px"],
+                          pad_bottom_px=look["pad_bottom_px"],
                           timeout_ms=cfg["timeout"] * 1000)
         return Image.open(out).convert("RGB")
     if cfg["shoot"]:
@@ -477,6 +491,8 @@ def obtain_image(cfg, species=None):
               headline_px=look["headline_px"], eyebrow_px=look["eyebrow_px"],
               lowercase=cfg["shoot_lowercase"], mat=look["mat"], collage_vh=look["collage_vh"],
               title_gap_px=look["title_gap_px"], group_y=look["group_y"],
+              pad_top_px=look["pad_top_px"], pad_side_px=look["pad_side_px"],
+              pad_bottom_px=look["pad_bottom_px"],
               small_floor=cfg["shoot_small_floor"], count_exp=cfg["shoot_count_exp"], timeout_ms=cfg["timeout"] * 1000,
               window_hours=cfg["hours"] if mode == "24h" else None,
               window_today=(mode == "today"),
