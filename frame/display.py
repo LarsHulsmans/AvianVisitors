@@ -425,9 +425,7 @@ def save_state(path, sig, when, state=None):
     state = state or {}
     path = os.path.expanduser(path)
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-    # Use a unique temp file per writer to avoid collisions when the timer,
-    # button service, and a manual run overlap.
-    tmp = f"{path}.{os.getpid()}.{time.time_ns()}.tmp"
+    tmp = path + ".tmp"
     payload = {
         "signature": sig,
         "last_refresh": when,
