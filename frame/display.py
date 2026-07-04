@@ -58,6 +58,7 @@ DEFAULTS = {
     "shoot_subtitle_today": None,  # optional mode override for large headline text
     "shoot_headline_px": 42, "shoot_eyebrow_px": 18, "shoot_lowercase": False,
     "shoot_mat": 0.04, "shoot_small_floor": 0.04, "shoot_count_exp": 0.65,
+    "layout_mode": "framed",  # "framed" (A5 mat layout) or "full" (edge-to-edge panel)
     "mat": 0.0,             # extra global shrink of the content inside the A5 opening
     "rotate": 90,           # 90 or 270 if the frame hangs the other way up
     "saturation": 0.6,
@@ -95,6 +96,11 @@ def _bucket(n):
 def _normalize_window_mode(mode):
     mode = str(mode or "24h").strip().lower()
     return "today" if mode == "today" else "24h"
+
+
+def _normalize_layout_mode(mode):
+    mode = str(mode or "framed").strip().lower()
+    return "full" if mode == "full" else "framed"
 
 
 def _hours_since_midnight(now_local=None):
@@ -308,6 +314,13 @@ def _status_label(cfg):
     return str(cfg.get("status_text_24h", "24H") or "")
 
 
+def _layout_image(cfg, img, species):
+    mode = _normalize_layout_mode(cfg.get("layout_mode", "framed"))
+    if mode == "full":
+        return img
+    return mat_and_center(img, cfg["mat"], empty=(species == []))
+
+
 def _draw_status_label(img, text):
     if not text:
         return
@@ -474,7 +487,7 @@ def run(cfg, preview=None, force=False, use_signature=True, mat_box=False):
         print(f"could not get image: {e}", file=sys.stderr)  # keep last panel image
         save_state(cfg["state"], state.get("signature"), state.get("last_refresh", 0), state)
         return
-    img = mat_and_center(img, cfg["mat"], empty=(species == []))
+    img = _layout_image(cfg, img, species)
     _draw_status_label(img, _status_label(cfg))
     if preview:
         out = quantize_spectra6(img)
@@ -524,6 +537,7 @@ def load_config(path):
         with open(os.path.expanduser(path), "rb") as f:
             cfg.update(tomllib.load(f))
     cfg["window_mode"] = _normalize_window_mode(cfg.get("window_mode", "24h"))
+    cfg["layout_mode"] = _normalize_layout_mode(cfg.get("layout_mode", "framed"))
     return cfg
 
 
