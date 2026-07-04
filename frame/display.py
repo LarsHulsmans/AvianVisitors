@@ -65,6 +65,7 @@ DEFAULTS = {
     "shoot_collage_lock_center": False,
     "shoot_title_detached": False,
     "shoot_title_offset_y_px": 0,
+    "shoot_full_y_shift_px": 0,
     "shoot_pad_top_px": None,
     "shoot_pad_side_px": None,
     "shoot_pad_bottom_px": None,
@@ -354,9 +355,10 @@ def _shoot_kwargs(cfg):
         look["collage_vh"] = 140
         look["title_gap_px"] = 0
         look["mat"] = 0.0
-        look["pad_top_px"] = 100
+        look["pad_top_px"] = 70
         look["pad_side_px"] = 0
         look["pad_bottom_px"] = 0
+        look["full_y_shift_px"] = cfg.get("shoot_full_y_shift_px", 0)
     return look
 
 
@@ -477,6 +479,7 @@ def obtain_image(cfg, species=None):
                           collage_lock_center=look["collage_lock_center"],
                           title_detached=look["title_detached"],
                           title_offset_y_px=look["title_offset_y_px"],
+                          full_y_shift_px=look.get("full_y_shift_px", 0),
                           pad_top_px=look["pad_top_px"], pad_side_px=look["pad_side_px"],
                           pad_bottom_px=look["pad_bottom_px"],
                           timeout_ms=cfg["timeout"] * 1000)
@@ -494,6 +497,7 @@ def obtain_image(cfg, species=None):
               collage_lock_center=look["collage_lock_center"],
               title_detached=look["title_detached"],
               title_offset_y_px=look["title_offset_y_px"],
+              full_y_shift_px=look.get("full_y_shift_px", 0),
               pad_top_px=look["pad_top_px"], pad_side_px=look["pad_side_px"],
               pad_bottom_px=look["pad_bottom_px"],
               small_floor=cfg["shoot_small_floor"], count_exp=cfg["shoot_count_exp"], timeout_ms=cfg["timeout"] * 1000,

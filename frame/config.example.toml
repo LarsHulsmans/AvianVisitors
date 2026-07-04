@@ -42,6 +42,7 @@ shoot_subtitle = "Heard Today"
 # shoot_collage_lock_center = false
 # shoot_title_detached = false
 # shoot_title_offset_y_px = 0
+# shoot_full_y_shift_px = 0  # full-mode only; positive moves everything down
 # shoot_pad_top_px = 30
 # shoot_pad_side_px = 24
 # shoot_pad_bottom_px = 24

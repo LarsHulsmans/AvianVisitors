@@ -51,7 +51,7 @@ HIDE_CSS = """
 
 def _frame_css(headline_px, eyebrow_px, lowercase, pad_top, pad_side, pad_bottom,
                collage_vh, title_gap_px, group_y, collage_lock_center,
-               title_detached, title_offset_y_px):
+               title_detached, title_offset_y_px, full_y_shift_px=0):
     justify = group_y if group_y in ("flex-start", "center", "flex-end") else "center"
     if pad_top == 0 and pad_side == 0 and pad_bottom == 0:
         css = (
@@ -67,9 +67,10 @@ def _frame_css(headline_px, eyebrow_px, lowercase, pad_top, pad_side, pad_bottom
         )
         return css
     if pad_side == 0 and pad_bottom == 0 and pad_top >= 80:
+        shift = int(full_y_shift_px or 0)
         title_style = (
             f"position: absolute !important; left: 0 !important; right: 0 !important;"
-            f" top: {pad_top}px !important; transform: none !important;"
+            f" top: {pad_top + shift}px !important; transform: none !important;"
             f" z-index: 6; padding: 0 16px !important; pointer-events: none;"
         )
         css = (
@@ -79,7 +80,7 @@ def _frame_css(headline_px, eyebrow_px, lowercase, pad_top, pad_side, pad_bottom
             f".static-head .pre {{ font-size: {eyebrow_px}px !important; }}"
             f".static-head h1 {{ font-size: {headline_px}px !important; }}"
             ".views { position: relative !important; left: 0 !important; right: 0 !important; top: 0 !important; "
-            "transform: none !important; flex: 1 1 auto !important; height: 100% !important; min-height: 0 !important; display: flex !important; align-items: center !important; justify-content: center !important; }"
+            f"transform: translateY({shift}px) !important; flex: 1 1 auto !important; height: 100% !important; min-height: 0 !important; display: flex !important; align-items: center !important; justify-content: center !important; }"
             ".view#v0 { height: 100% !important; flex: 1 1 auto !important; padding: 0 !important; overflow: hidden !important; display: flex !important; align-items: center !important; justify-content: center !important; }"
             ".gcollage { max-width: none !important; display: flex !important; align-items: center !important; justify-content: center !important; transform: scale(1.4) !important; transform-origin: center center !important; width: calc(100% / 1.4) !important; height: calc(100% / 1.4) !important; }"
             ".gcollage, .gcollage * { max-height: 100% !important; }"
@@ -246,6 +247,7 @@ def shoot(url, out, *, title=None, subtitle=None, vw=600, vh=800, dsf=2,
           mat=0.04, collage_vh=52, title_gap_px=14, cluster_xbias=1.0, cluster_ybias=1.2,
           group_y="center",
           collage_lock_center=False, title_detached=False, title_offset_y_px=0,
+          full_y_shift_px=0,
           pad_top_px=None, pad_side_px=None, pad_bottom_px=None,
           count_exp=0.4, cluster_pad=1, small_floor=0.04, window_hours=None,
           window_today=False,
@@ -271,7 +273,7 @@ def shoot(url, out, *, title=None, subtitle=None, vw=600, vh=800, dsf=2,
 
             css = HIDE_CSS + _frame_css(headline_px, eyebrow_px, lowercase, pad_top, pad_side, pad_bottom,
                                         collage_vh, title_gap_px, group_y, collage_lock_center,
-                                        title_detached, title_offset_y_px)
+                                        title_detached, title_offset_y_px, full_y_shift_px)
             page.add_init_script(
                 "document.addEventListener('DOMContentLoaded',function(){"
                 "var s=document.createElement('style');s.textContent=" + json.dumps(css) +
