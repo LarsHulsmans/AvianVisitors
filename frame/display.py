@@ -58,6 +58,11 @@ DEFAULTS = {
     "shoot_subtitle_today": None,  # optional mode override for large headline text
     "shoot_headline_px": 42, "shoot_eyebrow_px": 18, "shoot_lowercase": False,
     "shoot_mat": 0.04, "shoot_small_floor": 0.04, "shoot_count_exp": 0.65,
+    "shoot_collage_vh": 52,
+    "shoot_mat_full": 0.0,         # when layout_mode=full, remove stage padding
+    "shoot_collage_vh_full": 84,   # when layout_mode=full, make collage dominate
+    "shoot_headline_px_full": 32,  # when layout_mode=full, keep title compact
+    "shoot_eyebrow_px_full": 14,
     "layout_mode": "framed",  # "framed" (A5 mat layout) or "full" (edge-to-edge panel)
     "mat": 0.0,             # extra global shrink of the content inside the A5 opening
     "rotate": 90,           # 90 or 270 if the frame hangs the other way up
@@ -321,6 +326,23 @@ def _layout_image(cfg, img, species):
     return mat_and_center(img, cfg["mat"], empty=(species == []))
 
 
+def _shoot_kwargs(cfg):
+    mode = _normalize_layout_mode(cfg.get("layout_mode", "framed"))
+    if mode == "full":
+        return {
+            "headline_px": cfg["shoot_headline_px_full"],
+            "eyebrow_px": cfg["shoot_eyebrow_px_full"],
+            "mat": cfg["shoot_mat_full"],
+            "collage_vh": cfg["shoot_collage_vh_full"],
+        }
+    return {
+        "headline_px": cfg["shoot_headline_px"],
+        "eyebrow_px": cfg["shoot_eyebrow_px"],
+        "mat": cfg["shoot_mat"],
+        "collage_vh": cfg["shoot_collage_vh"],
+    }
+
+
 def _draw_status_label(img, text):
     if not text:
         return
@@ -430,7 +452,10 @@ def obtain_image(cfg, species=None):
             species = fetch_species(cfg, _auth(cfg))
         out = os.path.join(os.path.expanduser(cfg["cache"]), "frame.png")
         os.makedirs(os.path.dirname(out), exist_ok=True)
+        look = _shoot_kwargs(cfg)
         shoot_birdweather(out, species, title=cfg["shoot_title"], subtitle=_mode_subtitle(cfg),
+                          headline_px=look["headline_px"], eyebrow_px=look["eyebrow_px"],
+                          mat=look["mat"], collage_vh=look["collage_vh"],
                           timeout_ms=cfg["timeout"] * 1000)
         return Image.open(out).convert("RGB")
     if cfg["shoot"]:
@@ -438,9 +463,10 @@ def obtain_image(cfg, species=None):
         out = os.path.join(os.path.expanduser(cfg["cache"]), "shot.png")
         os.makedirs(os.path.dirname(out), exist_ok=True)
         mode = _normalize_window_mode(cfg.get("_window_mode", cfg.get("window_mode", "24h")))
+        look = _shoot_kwargs(cfg)
         shoot(cfg["base_url"], out, title=cfg["shoot_title"], subtitle=_mode_subtitle(cfg),
-              headline_px=cfg["shoot_headline_px"], eyebrow_px=cfg["shoot_eyebrow_px"],
-              lowercase=cfg["shoot_lowercase"], mat=cfg["shoot_mat"],
+              headline_px=look["headline_px"], eyebrow_px=look["eyebrow_px"],
+              lowercase=cfg["shoot_lowercase"], mat=look["mat"], collage_vh=look["collage_vh"],
               small_floor=cfg["shoot_small_floor"], count_exp=cfg["shoot_count_exp"], timeout_ms=cfg["timeout"] * 1000,
               window_hours=cfg["hours"] if mode == "24h" else None,
               window_today=(mode == "today"),
