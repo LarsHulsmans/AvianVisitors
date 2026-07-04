@@ -372,27 +372,11 @@ def _apply_button_toggle(cfg, state):
     btn = str(cfg.get("toggle_button") or "").strip().lower()
     if btn not in BUTTON_PINS:
         return cur
-    if cfg.get("_button_pressed"):
-        now = time.time()
-        if now - float(state.get("last_toggle") or 0) < 2:
-            return cur
-        nxt = "today" if cur == "24h" else "24h"
-        state["window_mode"] = nxt
-        state["last_toggle"] = now
-        print(f"window mode toggled to {nxt} via button {btn.upper()}")
-        return nxt
-    try:
-        from gpiozero import Button
-    except Exception:
+    # The dedicated watcher service owns the GPIO pin and sets _button_pressed
+    # before calling run(). Timer/manual runs should never touch GPIO directly,
+    # otherwise they'd collide with the watcher and fail with "GPIO busy".
+    if not cfg.get("_button_pressed"):
         return cur
-
-    button = Button(BUTTON_PINS[btn], pull_up=True, bounce_time=0.05)
-    try:
-        if not button.is_pressed:
-            return cur
-    finally:
-        button.close()
-
     now = time.time()
     if now - float(state.get("last_toggle") or 0) < 2:
         return cur
