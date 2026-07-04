@@ -50,19 +50,47 @@ HIDE_CSS = """
 
 
 def _frame_css(headline_px, eyebrow_px, lowercase, pad_top, pad_side, pad_bottom,
-               collage_vh, title_gap_px, group_y):
+               collage_vh, title_gap_px, group_y, collage_lock_center,
+               title_detached, title_offset_y_px):
     justify = group_y if group_y in ("flex-start", "center", "flex-end") else "center"
-    css = (
-        f".stage {{ padding: {pad_top}px {pad_side}px {pad_bottom}px !important;"
-        f" box-sizing: border-box !important; display: flex !important;"
-        f" flex-direction: column !important; justify-content: {justify} !important; }}"
-        f".views {{ flex: 0 0 auto !important; height: {collage_vh}vh !important; }}"
-        f".view#v0 {{ height: 100% !important; flex: 1 1 100% !important; padding: 6px 0 !important; }}"
-        f".gcollage {{ max-width: none !important; }}"
-        f".static-head {{ padding: 0 8px {title_gap_px}px !important; }}"
-        f".static-head .pre {{ font-size: {eyebrow_px}px !important; }}"
-        f".static-head h1 {{ font-size: {headline_px}px !important; }}"
-    )
+    if collage_lock_center:
+        # Keep collage centered independently of title placement. Title can then
+        # be moved freely (including over the collage) with title_offset_y_px.
+        title_top = f"calc(50% - ({collage_vh}vh / 2) - {title_gap_px}px + {title_offset_y_px}px)"
+        title_style = (
+            f"position: absolute !important; left: {pad_side}px; right: {pad_side}px;"
+            f" top: {title_top}; transform: translateY(-100%);"
+            f" z-index: 5; padding: 0 8px 0 !important; pointer-events: none;"
+        )
+        if title_detached:
+            # Detached title remains absolutely positioned (same anchor) with
+            # configurable offset; kept as a separate toggle for config clarity.
+            title_style += ""
+        css = (
+            f".stage {{ position: relative !important;"
+            f" padding: {pad_top}px {pad_side}px {pad_bottom}px !important;"
+            f" box-sizing: border-box !important; }}"
+            f".views {{ position: absolute !important; left: {pad_side}px; right: {pad_side}px;"
+            f" top: 50% !important; transform: translateY(-50%) !important;"
+            f" height: {collage_vh}vh !important; }}"
+            f".view#v0 {{ height: 100% !important; flex: 1 1 100% !important; padding: 6px 0 !important; }}"
+            f".gcollage {{ max-width: none !important; }}"
+            f".static-head {{ {title_style} }}"
+            f".static-head .pre {{ font-size: {eyebrow_px}px !important; }}"
+            f".static-head h1 {{ font-size: {headline_px}px !important; }}"
+        )
+    else:
+        css = (
+            f".stage {{ padding: {pad_top}px {pad_side}px {pad_bottom}px !important;"
+            f" box-sizing: border-box !important; display: flex !important;"
+            f" flex-direction: column !important; justify-content: {justify} !important; }}"
+            f".views {{ flex: 0 0 auto !important; height: {collage_vh}vh !important; }}"
+            f".view#v0 {{ height: 100% !important; flex: 1 1 100% !important; padding: 6px 0 !important; }}"
+            f".gcollage {{ max-width: none !important; }}"
+            f".static-head {{ padding: 0 8px {title_gap_px}px !important; }}"
+            f".static-head .pre {{ font-size: {eyebrow_px}px !important; }}"
+            f".static-head h1 {{ font-size: {headline_px}px !important; }}"
+        )
     if lowercase:
         css += ".static-head h1 { text-transform: none !important; }"
     return css
@@ -182,7 +210,8 @@ def shoot(url, out, *, title=None, subtitle=None, vw=600, vh=800, dsf=2,
           headline_px=42, eyebrow_px=18, lowercase=False,
           mat=0.04, collage_vh=52, title_gap_px=14, cluster_xbias=1.0, cluster_ybias=1.2,
           group_y="center",
-        pad_top_px=None, pad_side_px=None, pad_bottom_px=None,
+          collage_lock_center=False, title_detached=False, title_offset_y_px=0,
+          pad_top_px=None, pad_side_px=None, pad_bottom_px=None,
           count_exp=0.4, cluster_pad=1, small_floor=0.04, window_hours=None,
           window_today=False,
           timeout_ms=45000, user=None, password=None, species=None, cutout_base=None,
@@ -206,7 +235,8 @@ def shoot(url, out, *, title=None, subtitle=None, vw=600, vh=800, dsf=2,
                 page.route("**/cutout.php*", _make_cutout_handler(cutout_base, cutout_local))
 
             css = HIDE_CSS + _frame_css(headline_px, eyebrow_px, lowercase, pad_top, pad_side, pad_bottom,
-                                        collage_vh, title_gap_px, group_y)
+                                        collage_vh, title_gap_px, group_y, collage_lock_center,
+                                        title_detached, title_offset_y_px)
             page.add_init_script(
                 "document.addEventListener('DOMContentLoaded',function(){"
                 "var s=document.createElement('style');s.textContent=" + json.dumps(css) +
@@ -288,6 +318,12 @@ def main():
                     help="bottom padding under the title block; lower = smaller title-to-collage gap")
     ap.add_argument("--group-y", default="center", choices=["center", "top", "bottom"],
                     help="vertical placement of the title+collage group")
+    ap.add_argument("--collage-lock-center", action="store_true",
+                    help="keep collage centered independently of title placement")
+    ap.add_argument("--title-detached", action="store_true",
+                    help="position title independently from collage flow")
+    ap.add_argument("--title-offset-y-px", type=int, default=0,
+                    help="vertical offset for detached title anchor; positive moves downward")
     ap.add_argument("--pad-top-px", type=int,
                     help="override stage top padding in pixels")
     ap.add_argument("--pad-side-px", type=int,
@@ -332,6 +368,9 @@ def main():
         look.update(vw=a.width, vh=a.height, dsf=a.dsf, mat=a.mat, collage_vh=a.collage_vh,
                     title_gap_px=a.title_gap_px,
                     group_y={"top": "flex-start", "center": "center", "bottom": "flex-end"}[a.group_y],
+                    collage_lock_center=a.collage_lock_center,
+                    title_detached=a.title_detached,
+                    title_offset_y_px=a.title_offset_y_px,
                     pad_top_px=a.pad_top_px, pad_side_px=a.pad_side_px, pad_bottom_px=a.pad_bottom_px,
                     cluster_xbias=a.cluster_xbias, cluster_ybias=a.cluster_ybias,
                     cluster_pad=a.cluster_pad, small_floor=a.small_floor, lowercase=a.lowercase,
@@ -354,6 +393,9 @@ def main():
               headline_px=headline_px, eyebrow_px=eyebrow_px, lowercase=a.lowercase,
               mat=a.mat, collage_vh=a.collage_vh, title_gap_px=a.title_gap_px,
               group_y={"top": "flex-start", "center": "center", "bottom": "flex-end"}[a.group_y],
+              collage_lock_center=a.collage_lock_center,
+              title_detached=a.title_detached,
+              title_offset_y_px=a.title_offset_y_px,
               pad_top_px=a.pad_top_px, pad_side_px=a.pad_side_px, pad_bottom_px=a.pad_bottom_px,
               cluster_xbias=a.cluster_xbias,
               cluster_ybias=a.cluster_ybias, count_exp=count_exp, cluster_pad=a.cluster_pad,
