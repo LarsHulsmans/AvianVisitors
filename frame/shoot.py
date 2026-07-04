@@ -49,14 +49,14 @@ HIDE_CSS = """
 """
 
 
-def _frame_css(headline_px, eyebrow_px, lowercase, pad_top, pad_side, pad_bottom, collage_vh):
+def _frame_css(headline_px, eyebrow_px, lowercase, pad_top, pad_side, pad_bottom, collage_vh, title_gap_px):
     css = (
         f".stage {{ padding: {pad_top}px {pad_side}px {pad_bottom}px !important;"
         f" box-sizing: border-box !important; justify-content: center !important; }}"
         f".views {{ flex: 0 0 auto !important; height: {collage_vh}vh !important; }}"
         f".view#v0 {{ height: 100% !important; flex: 1 1 100% !important; padding: 6px 0 !important; }}"
         f".gcollage {{ max-width: none !important; }}"
-        f".static-head {{ padding: 0 8px 14px !important; }}"
+        f".static-head {{ padding: 0 8px {title_gap_px}px !important; }}"
         f".static-head .pre {{ font-size: {eyebrow_px}px !important; }}"
         f".static-head h1 {{ font-size: {headline_px}px !important; }}"
     )
@@ -177,7 +177,7 @@ def _make_js_handler(xbias, ybias, count_exp, pad, auth, misses):
 
 def shoot(url, out, *, title=None, subtitle=None, vw=600, vh=800, dsf=2,
           headline_px=42, eyebrow_px=18, lowercase=False,
-          mat=0.04, collage_vh=52, cluster_xbias=1.0, cluster_ybias=1.2,
+          mat=0.04, collage_vh=52, title_gap_px=14, cluster_xbias=1.0, cluster_ybias=1.2,
           count_exp=0.4, cluster_pad=1, small_floor=0.04, window_hours=None,
           window_today=False,
           timeout_ms=45000, user=None, password=None, species=None, cutout_base=None,
@@ -198,7 +198,8 @@ def shoot(url, out, *, title=None, subtitle=None, vw=600, vh=800, dsf=2,
             if cutout_base:
                 page.route("**/cutout.php*", _make_cutout_handler(cutout_base, cutout_local))
 
-            css = HIDE_CSS + _frame_css(headline_px, eyebrow_px, lowercase, pad_top, pad_side, pad_bottom, collage_vh)
+            css = HIDE_CSS + _frame_css(headline_px, eyebrow_px, lowercase, pad_top, pad_side, pad_bottom,
+                                        collage_vh, title_gap_px)
             page.add_init_script(
                 "document.addEventListener('DOMContentLoaded',function(){"
                 "var s=document.createElement('style');s.textContent=" + json.dumps(css) +
@@ -276,6 +277,8 @@ def main():
                     help="eyebrow font px; default 18 for the mic, 17 for --bird-weather")
     ap.add_argument("--mat", type=float, default=0.04)
     ap.add_argument("--collage-vh", type=float, default=52)
+    ap.add_argument("--title-gap-px", type=int, default=14,
+                    help="bottom padding under the title block; lower = smaller title-to-collage gap")
     ap.add_argument("--cluster-xbias", type=float, default=1.0)
     ap.add_argument("--cluster-ybias", type=float, default=1.2)
     ap.add_argument("--count-exp", type=float, default=None,
@@ -312,6 +315,7 @@ def main():
         look = {k: v for k, v in (("count_exp", a.count_exp), ("headline_px", a.headline_px),
                                   ("eyebrow_px", a.eyebrow_px)) if v is not None}
         look.update(vw=a.width, vh=a.height, dsf=a.dsf, mat=a.mat, collage_vh=a.collage_vh,
+                    title_gap_px=a.title_gap_px,
                     cluster_xbias=a.cluster_xbias, cluster_ybias=a.cluster_ybias,
                     cluster_pad=a.cluster_pad, small_floor=a.small_floor, lowercase=a.lowercase,
                     window_hours=a.window_hours, window_today=a.window_today,
@@ -331,7 +335,8 @@ def main():
     try:
         shoot(a.url, a.out, title=a.title, subtitle=a.subtitle, vw=a.width, vh=a.height, dsf=a.dsf,
               headline_px=headline_px, eyebrow_px=eyebrow_px, lowercase=a.lowercase,
-              mat=a.mat, collage_vh=a.collage_vh, cluster_xbias=a.cluster_xbias,
+              mat=a.mat, collage_vh=a.collage_vh, title_gap_px=a.title_gap_px,
+              cluster_xbias=a.cluster_xbias,
               cluster_ybias=a.cluster_ybias, count_exp=count_exp, cluster_pad=a.cluster_pad,
               small_floor=a.small_floor,
               window_hours=a.window_hours, window_today=a.window_today,

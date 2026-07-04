@@ -59,10 +59,12 @@ DEFAULTS = {
     "shoot_headline_px": 42, "shoot_eyebrow_px": 18, "shoot_lowercase": False,
     "shoot_mat": 0.04, "shoot_small_floor": 0.04, "shoot_count_exp": 0.65,
     "shoot_collage_vh": 52,
+    "shoot_title_gap_px": 14,
     "shoot_mat_full": 0.0,         # when layout_mode=full, remove stage padding
     "shoot_collage_vh_full": 84,   # when layout_mode=full, make collage dominate
     "shoot_headline_px_full": 32,  # when layout_mode=full, keep title compact
     "shoot_eyebrow_px_full": 14,
+    "shoot_title_gap_px_full": 6,
     "layout_mode": "framed",  # "framed" (A5 mat layout) or "full" (edge-to-edge panel)
     "mat": 0.0,             # extra global shrink of the content inside the A5 opening
     "rotate": 90,           # 90 or 270 if the frame hangs the other way up
@@ -334,12 +336,14 @@ def _shoot_kwargs(cfg):
             "eyebrow_px": cfg["shoot_eyebrow_px_full"],
             "mat": cfg["shoot_mat_full"],
             "collage_vh": cfg["shoot_collage_vh_full"],
+            "title_gap_px": cfg["shoot_title_gap_px_full"],
         }
     return {
         "headline_px": cfg["shoot_headline_px"],
         "eyebrow_px": cfg["shoot_eyebrow_px"],
         "mat": cfg["shoot_mat"],
         "collage_vh": cfg["shoot_collage_vh"],
+        "title_gap_px": cfg["shoot_title_gap_px"],
     }
 
 
@@ -456,6 +460,7 @@ def obtain_image(cfg, species=None):
         shoot_birdweather(out, species, title=cfg["shoot_title"], subtitle=_mode_subtitle(cfg),
                           headline_px=look["headline_px"], eyebrow_px=look["eyebrow_px"],
                           mat=look["mat"], collage_vh=look["collage_vh"],
+                          title_gap_px=look["title_gap_px"],
                           timeout_ms=cfg["timeout"] * 1000)
         return Image.open(out).convert("RGB")
     if cfg["shoot"]:
@@ -467,6 +472,7 @@ def obtain_image(cfg, species=None):
         shoot(cfg["base_url"], out, title=cfg["shoot_title"], subtitle=_mode_subtitle(cfg),
               headline_px=look["headline_px"], eyebrow_px=look["eyebrow_px"],
               lowercase=cfg["shoot_lowercase"], mat=look["mat"], collage_vh=look["collage_vh"],
+              title_gap_px=look["title_gap_px"],
               small_floor=cfg["shoot_small_floor"], count_exp=cfg["shoot_count_exp"], timeout_ms=cfg["timeout"] * 1000,
               window_hours=cfg["hours"] if mode == "24h" else None,
               window_today=(mode == "today"),
