@@ -47,15 +47,15 @@ shoot_subtitle = "Heard Today"
 # shoot_pad_bottom_px = 24
 # Full-mode overrides (used when layout_mode = "full"):
 # shoot_mat_full = 0.0
-# shoot_collage_vh_full = 84
-# shoot_headline_px_full = 32
+# shoot_collage_vh_full = 72
+# shoot_headline_px_full = 30
 # shoot_eyebrow_px_full = 14
-# shoot_title_gap_px_full = 6
+# shoot_title_gap_px_full = 8
 # shoot_group_y_full = "center" # flex-start | center | flex-end
-# shoot_collage_lock_center_full = true
-# shoot_title_detached_full = true
+# shoot_collage_lock_center_full = false
+# shoot_title_detached_full = false
 # shoot_title_offset_y_px_full = 0
-# shoot_pad_top_px_full = 56
+# shoot_pad_top_px_full = 0
 # shoot_pad_side_px_full = 0
 # shoot_pad_bottom_px_full = 0
 # shoot_lowercase = false
@@ -64,7 +64,7 @@ shoot_subtitle = "Heard Today"
 # shoot_count_exp = 0.65   # tile size vs call count; higher = the loudest birds dominate more
 
 # --- Panel ------------------------------------------------------------------
-layout_mode = "framed" # "framed" keeps the A5 mat look, "full" fills the whole panel
+layout_mode = "framed" # "framed" keeps the A5 mat look, "full" uses a simpler edge-to-edge layout
 rotate = 90            # 90 or 270 if the frame hangs the other way up
 saturation = 0.6       # Inky colour saturation, 0 to 1
 mat = 0.0              # extra shrink of the content inside the A5 opening (0 = none)

@@ -53,6 +53,22 @@ def _frame_css(headline_px, eyebrow_px, lowercase, pad_top, pad_side, pad_bottom
                collage_vh, title_gap_px, group_y, collage_lock_center,
                title_detached, title_offset_y_px):
     justify = group_y if group_y in ("flex-start", "center", "flex-end") else "center"
+    if pad_top == 0 and pad_side == 0 and pad_bottom == 0:
+        css = (
+            ".stage { position: relative !important; padding: 0 !important; box-sizing: border-box !important; "
+            "display: flex !important; flex-direction: column !important; height: 100vh !important; overflow: hidden !important; }"
+            ".static-head { position: relative !important; z-index: 5; flex: 0 0 auto !important; "
+            "padding: 16px 20px 8px !important; box-sizing: border-box !important; }"
+            f".static-head .pre {{ font-size: {eyebrow_px}px !important; }}"
+            f".static-head h1 {{ font-size: {headline_px}px !important; }}"
+            ".views { position: relative !important; left: 0 !important; right: 0 !important; top: 0 !important; "
+            "transform: none !important; flex: 1 1 auto !important; height: auto !important; min-height: 0 !important; }"
+            ".view#v0 { height: 100% !important; flex: 1 1 auto !important; padding: 0 !important; overflow: hidden !important; }"
+            ".gcollage { max-width: none !important; }"
+        )
+        if lowercase:
+            css += ".static-head h1 { text-transform: none !important; }"
+        return css
     if collage_lock_center:
         # Keep collage centered independently of title placement. Title can then
         # be moved freely (including over the collage) with title_offset_y_px.
