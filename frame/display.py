@@ -356,7 +356,7 @@ def _shoot_kwargs(cfg):
         look["full_collage_vh"] = cfg.get("shoot_full_collage_vh", 140)
         look["title_gap_px"] = 0
         look["mat"] = 0.0
-        look["pad_top_px"] = 70
+        look["pad_top_px"] = 100
         look["pad_side_px"] = 0
         look["pad_bottom_px"] = 0
         look["full_y_shift_px"] = cfg.get("shoot_full_y_shift_px", 0)
