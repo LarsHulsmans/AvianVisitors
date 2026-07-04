@@ -511,8 +511,9 @@ def watch_button(cfg):
             button.wait_for_press()
             # Run immediately while the button is still down; run() will also
             # toggle the 24h/today mode and force a redraw path for that change.
+            print(f"button {btn.upper()} pressed; refreshing now")
             cfg["_button_pressed"] = True
-            run(cfg, force=True, use_signature=True)
+            run(cfg, force=True, use_signature=False)
             button.wait_for_release(timeout=2)
     finally:
         button.close()
