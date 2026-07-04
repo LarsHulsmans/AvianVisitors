@@ -18,6 +18,7 @@ import io
 import json
 import os
 import re
+import signal
 import statistics
 import sys
 import time
@@ -587,17 +588,32 @@ def watch_button(cfg):
         raise RuntimeError(f"gpio button support unavailable: {e}")
 
     button = Button(BUTTON_PINS[btn], pull_up=True, bounce_time=0.05)
+    stop_requested = False
+
+    def _request_stop(signum, frame):
+        nonlocal stop_requested
+        stop_requested = True
+
+    previous_sigterm = signal.signal(signal.SIGTERM, _request_stop)
+    previous_sigint = signal.signal(signal.SIGINT, _request_stop)
     print(f"watching button {btn.upper()} for immediate refreshes")
     try:
-        while True:
-            button.wait_for_press()
+        while not stop_requested:
+            if not button.wait_for_press(timeout=1):
+                continue
+            if stop_requested:
+                break
             # Run immediately while the button is still down; run() will also
             # toggle the 24h/today mode and force a redraw path for that change.
             print(f"button {btn.upper()} pressed; refreshing now")
             cfg["_button_pressed"] = True
             run(cfg, force=True, use_signature=False)
+            if stop_requested:
+                break
             button.wait_for_release(timeout=2)
     finally:
+        signal.signal(signal.SIGTERM, previous_sigterm)
+        signal.signal(signal.SIGINT, previous_sigint)
         button.close()
 
 
