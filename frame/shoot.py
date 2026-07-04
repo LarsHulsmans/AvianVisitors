@@ -49,10 +49,13 @@ HIDE_CSS = """
 """
 
 
-def _frame_css(headline_px, eyebrow_px, lowercase, pad_top, pad_side, pad_bottom, collage_vh, title_gap_px):
+def _frame_css(headline_px, eyebrow_px, lowercase, pad_top, pad_side, pad_bottom,
+               collage_vh, title_gap_px, group_y):
+    justify = group_y if group_y in ("flex-start", "center", "flex-end") else "center"
     css = (
         f".stage {{ padding: {pad_top}px {pad_side}px {pad_bottom}px !important;"
-        f" box-sizing: border-box !important; justify-content: center !important; }}"
+        f" box-sizing: border-box !important; display: flex !important;"
+        f" flex-direction: column !important; justify-content: {justify} !important; }}"
         f".views {{ flex: 0 0 auto !important; height: {collage_vh}vh !important; }}"
         f".view#v0 {{ height: 100% !important; flex: 1 1 100% !important; padding: 6px 0 !important; }}"
         f".gcollage {{ max-width: none !important; }}"
@@ -178,6 +181,7 @@ def _make_js_handler(xbias, ybias, count_exp, pad, auth, misses):
 def shoot(url, out, *, title=None, subtitle=None, vw=600, vh=800, dsf=2,
           headline_px=42, eyebrow_px=18, lowercase=False,
           mat=0.04, collage_vh=52, title_gap_px=14, cluster_xbias=1.0, cluster_ybias=1.2,
+          group_y="center",
           count_exp=0.4, cluster_pad=1, small_floor=0.04, window_hours=None,
           window_today=False,
           timeout_ms=45000, user=None, password=None, species=None, cutout_base=None,
@@ -199,7 +203,7 @@ def shoot(url, out, *, title=None, subtitle=None, vw=600, vh=800, dsf=2,
                 page.route("**/cutout.php*", _make_cutout_handler(cutout_base, cutout_local))
 
             css = HIDE_CSS + _frame_css(headline_px, eyebrow_px, lowercase, pad_top, pad_side, pad_bottom,
-                                        collage_vh, title_gap_px)
+                                        collage_vh, title_gap_px, group_y)
             page.add_init_script(
                 "document.addEventListener('DOMContentLoaded',function(){"
                 "var s=document.createElement('style');s.textContent=" + json.dumps(css) +
@@ -279,6 +283,8 @@ def main():
     ap.add_argument("--collage-vh", type=float, default=52)
     ap.add_argument("--title-gap-px", type=int, default=14,
                     help="bottom padding under the title block; lower = smaller title-to-collage gap")
+    ap.add_argument("--group-y", default="center", choices=["center", "top", "bottom"],
+                    help="vertical placement of the title+collage group")
     ap.add_argument("--cluster-xbias", type=float, default=1.0)
     ap.add_argument("--cluster-ybias", type=float, default=1.2)
     ap.add_argument("--count-exp", type=float, default=None,
@@ -316,6 +322,7 @@ def main():
                                   ("eyebrow_px", a.eyebrow_px)) if v is not None}
         look.update(vw=a.width, vh=a.height, dsf=a.dsf, mat=a.mat, collage_vh=a.collage_vh,
                     title_gap_px=a.title_gap_px,
+                    group_y={"top": "flex-start", "center": "center", "bottom": "flex-end"}[a.group_y],
                     cluster_xbias=a.cluster_xbias, cluster_ybias=a.cluster_ybias,
                     cluster_pad=a.cluster_pad, small_floor=a.small_floor, lowercase=a.lowercase,
                     window_hours=a.window_hours, window_today=a.window_today,
@@ -336,6 +343,7 @@ def main():
         shoot(a.url, a.out, title=a.title, subtitle=a.subtitle, vw=a.width, vh=a.height, dsf=a.dsf,
               headline_px=headline_px, eyebrow_px=eyebrow_px, lowercase=a.lowercase,
               mat=a.mat, collage_vh=a.collage_vh, title_gap_px=a.title_gap_px,
+              group_y={"top": "flex-start", "center": "center", "bottom": "flex-end"}[a.group_y],
               cluster_xbias=a.cluster_xbias,
               cluster_ybias=a.cluster_ybias, count_exp=count_exp, cluster_pad=a.cluster_pad,
               small_floor=a.small_floor,
