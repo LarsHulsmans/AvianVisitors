@@ -49,6 +49,7 @@ DEFAULTS = {
     "hours": 24,
     "window_mode": "24h",   # "24h" (rolling) or "today" (since local midnight)
     "toggle_button": "a",   # Inky button (a/b/c/d) checked each run; hold to toggle mode
+    "layout_toggle_button": "b",  # Inky button that toggles framed/full layout
     "status_text_24h": "24H",      # top-right status label when mode is 24h
     "status_text_today": "TODAY",  # top-right status label when mode is today
     "image": "",            # local PNG written by the shooter
@@ -412,7 +413,14 @@ def load_state(path):
         with open(os.path.expanduser(path)) as f:
             return json.load(f)
     except Exception:
-        return {"signature": None, "last_refresh": 0, "window_mode": None, "layout_mode": None, "last_toggle": 0}
+        return {
+            "signature": None,
+            "last_refresh": 0,
+            "window_mode": None,
+            "layout_mode": None,
+            "last_toggle": 0,
+            "last_layout_toggle": 0,
+        }
 
 
 def save_state(path, sig, when, state=None):
@@ -426,6 +434,7 @@ def save_state(path, sig, when, state=None):
         "window_mode": state.get("window_mode"),
         "layout_mode": state.get("layout_mode"),
         "last_toggle": state.get("last_toggle", 0),
+        "last_layout_toggle": state.get("last_layout_toggle", 0),
     }
     with open(tmp, "w") as f:
         json.dump(payload, f)
@@ -583,14 +592,20 @@ def run(cfg, preview=None, force=False, use_signature=True, mat_box=False):
 
 def watch_button(cfg):
     btn = str(cfg.get("toggle_button") or "").strip().lower()
+    layout_btn = str(cfg.get("layout_toggle_button") or "").strip().lower()
     if btn not in BUTTON_PINS:
         raise ValueError("set toggle_button to one of: a, b, c, d")
+    if layout_btn and layout_btn not in BUTTON_PINS:
+        raise ValueError("set layout_toggle_button to one of: a, b, c, d")
     try:
         from gpiozero import Button
     except Exception as e:
         raise RuntimeError(f"gpio button support unavailable: {e}")
 
     button = Button(BUTTON_PINS[btn], pull_up=True, bounce_time=0.05)
+    layout_button = None
+    if layout_btn and layout_btn != btn:
+        layout_button = Button(BUTTON_PINS[layout_btn], pull_up=True, bounce_time=0.05)
     stop_requested = False
 
     def _request_stop(signum, frame):
@@ -599,31 +614,69 @@ def watch_button(cfg):
 
     previous_sigterm = signal.signal(signal.SIGTERM, _request_stop)
     previous_sigint = signal.signal(signal.SIGINT, _request_stop)
-    print(f"watching button {btn.upper()} for immediate refreshes")
+    if layout_button:
+        print(f"watching button {btn.upper()} for 24h/today and {layout_btn.upper()} for framed/full")
+    else:
+        print(f"watching button {btn.upper()} for immediate refreshes")
+
+    mode_down = False
+    layout_down = False
+
+    def _fresh_cfg():
+        if cfg.get("_config_path"):
+            run_cfg = load_config(cfg.get("_config_path"))
+            run_cfg["_config_path"] = cfg.get("_config_path")
+            return run_cfg
+        return cfg
+
+    def _toggle_layout_and_run(run_cfg):
+        state = load_state(run_cfg["state"])
+        now = time.time()
+        if now - float(state.get("last_layout_toggle") or 0) < 2:
+            return
+        cur = _normalize_layout_mode(state.get("layout_mode") or _active_layout_mode(run_cfg))
+        nxt = "full" if cur == "framed" else "framed"
+        state["layout_mode"] = nxt
+        state["last_layout_toggle"] = now
+        run_cfg["_layout_mode"] = nxt
+        run_cfg["_layout_mode_from_config"] = False
+        save_state(run_cfg["state"], state.get("signature"), state.get("last_refresh", 0), state)
+        print(f"layout mode toggled to {nxt} via button {layout_btn.upper()}")
+        run(run_cfg, force=True, use_signature=False)
+
     try:
         while not stop_requested:
-            if not button.wait_for_press(timeout=1):
-                continue
-            if stop_requested:
-                break
-            # Run immediately while the button is still down; run() will also
-            # toggle the 24h/today mode and force a redraw path for that change.
-            print(f"button {btn.upper()} pressed; refreshing now")
-            run_cfg = cfg
-            if cfg.get("_config_path"):
-                # The watcher is long-lived; reload config each press so layout
-                # and look changes in config.toml apply without a service restart.
-                run_cfg = load_config(cfg.get("_config_path"))
-                run_cfg["_config_path"] = cfg.get("_config_path")
-            run_cfg["_button_pressed"] = True
-            run(run_cfg, force=True, use_signature=False)
-            if stop_requested:
-                break
-            button.wait_for_release(timeout=2)
+            if button.is_pressed:
+                if not mode_down:
+                    mode_down = True
+                    if stop_requested:
+                        break
+                    # Run immediately while the button is still down; run() will also
+                    # toggle the 24h/today mode and force a redraw path for that change.
+                    print(f"button {btn.upper()} pressed; refreshing now")
+                    run_cfg = _fresh_cfg()
+                    run_cfg["_button_pressed"] = True
+                    run(run_cfg, force=True, use_signature=False)
+            else:
+                mode_down = False
+
+            if layout_button and layout_button.is_pressed:
+                if not layout_down:
+                    layout_down = True
+                    if stop_requested:
+                        break
+                    run_cfg = _fresh_cfg()
+                    _toggle_layout_and_run(run_cfg)
+            else:
+                layout_down = False
+
+            time.sleep(0.1)
     finally:
         signal.signal(signal.SIGTERM, previous_sigterm)
         signal.signal(signal.SIGINT, previous_sigint)
         button.close()
+        if layout_button:
+            layout_button.close()
 
 
 def load_config(path):
