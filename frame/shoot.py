@@ -51,7 +51,8 @@ HIDE_CSS = """
 
 def _frame_css(headline_px, eyebrow_px, lowercase, pad_top, pad_side, pad_bottom,
                collage_vh, title_gap_px, group_y, collage_lock_center,
-               title_detached, title_offset_y_px, full_y_shift_px=0, full_collage_vh=140):
+               title_detached, title_offset_y_px, full_y_shift_px=0, full_collage_vh=140,
+               full_text_y_px=0):
     justify = group_y if group_y in ("flex-start", "center", "flex-end") else "center"
     if pad_top == 0 and pad_side == 0 and pad_bottom == 0:
         css = (
@@ -69,9 +70,10 @@ def _frame_css(headline_px, eyebrow_px, lowercase, pad_top, pad_side, pad_bottom
     if pad_side == 0 and pad_bottom == 0 and pad_top >= 80:
         shift = int(full_y_shift_px or 0)
         collage_vh = int(full_collage_vh or 140)
+        text_y = pad_top + int(full_text_y_px or 0) + shift
         title_style = (
             f"position: absolute !important; left: 0 !important; right: 0 !important;"
-            f" top: {pad_top + shift}px !important; transform: none !important;"
+            f" top: {text_y}px !important; transform: none !important;"
             f" z-index: 6; padding: 0 16px !important; pointer-events: none;"
         )
         css = (
@@ -248,7 +250,7 @@ def shoot(url, out, *, title=None, subtitle=None, vw=600, vh=800, dsf=2,
           mat=0.04, collage_vh=52, title_gap_px=14, cluster_xbias=1.0, cluster_ybias=1.2,
           group_y="center",
           collage_lock_center=False, title_detached=False, title_offset_y_px=0,
-          full_y_shift_px=0, full_collage_vh=140,
+          full_y_shift_px=0, full_collage_vh=140, full_text_y_px=0,
           pad_top_px=None, pad_side_px=None, pad_bottom_px=None,
           count_exp=0.4, cluster_pad=1, small_floor=0.04, window_hours=None,
           window_today=False,
@@ -274,7 +276,8 @@ def shoot(url, out, *, title=None, subtitle=None, vw=600, vh=800, dsf=2,
 
             css = HIDE_CSS + _frame_css(headline_px, eyebrow_px, lowercase, pad_top, pad_side, pad_bottom,
                                         collage_vh, title_gap_px, group_y, collage_lock_center,
-                                        title_detached, title_offset_y_px, full_y_shift_px, full_collage_vh)
+                                        title_detached, title_offset_y_px, full_y_shift_px,
+                                        full_collage_vh, full_text_y_px)
             page.add_init_script(
                 "document.addEventListener('DOMContentLoaded',function(){"
                 "var s=document.createElement('style');s.textContent=" + json.dumps(css) +

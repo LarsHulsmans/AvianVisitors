@@ -67,6 +67,7 @@ DEFAULTS = {
     "shoot_title_offset_y_px": 0,
     "shoot_full_y_shift_px": 0,
     "shoot_full_collage_vh": 140,
+    "shoot_full_text_y_px": 0,
     "shoot_pad_top_px": None,
     "shoot_pad_side_px": None,
     "shoot_pad_bottom_px": None,
@@ -360,6 +361,7 @@ def _shoot_kwargs(cfg):
         look["pad_side_px"] = 0
         look["pad_bottom_px"] = 0
         look["full_y_shift_px"] = cfg.get("shoot_full_y_shift_px", 0)
+        look["full_text_y_px"] = cfg.get("shoot_full_text_y_px", 0)
     return look
 
 
@@ -482,6 +484,7 @@ def obtain_image(cfg, species=None):
                           title_offset_y_px=look["title_offset_y_px"],
                           full_y_shift_px=look.get("full_y_shift_px", 0),
                           full_collage_vh=look.get("full_collage_vh", 140),
+                          full_text_y_px=look.get("full_text_y_px", 0),
                           pad_top_px=look["pad_top_px"], pad_side_px=look["pad_side_px"],
                           pad_bottom_px=look["pad_bottom_px"],
                           timeout_ms=cfg["timeout"] * 1000)
@@ -501,6 +504,7 @@ def obtain_image(cfg, species=None):
               title_offset_y_px=look["title_offset_y_px"],
               full_y_shift_px=look.get("full_y_shift_px", 0),
               full_collage_vh=look.get("full_collage_vh", 140),
+              full_text_y_px=look.get("full_text_y_px", 0),
               pad_top_px=look["pad_top_px"], pad_side_px=look["pad_side_px"],
               pad_bottom_px=look["pad_bottom_px"],
               small_floor=cfg["shoot_small_floor"], count_exp=cfg["shoot_count_exp"], timeout_ms=cfg["timeout"] * 1000,
