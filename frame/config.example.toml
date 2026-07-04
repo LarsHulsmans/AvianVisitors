@@ -24,7 +24,7 @@ shoot = true
 
 hours = 24             # window shown on the frame
 window_mode = "24h"   # "24h" (rolling) or "today" (since local midnight)
-# toggle_button = "a"  # hold this Inky button during a refresh to toggle 24h/today
+# toggle_button = "a"  # press this Inky button to refresh now + toggle 24h/today
 
 # --- Titles and look (used when this Pi renders, i.e. shoot = true) ----------
 shoot_title = "Avian Visitors"

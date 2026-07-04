@@ -72,8 +72,8 @@ The frame window can be either a rolling last-24h view or strict local-today
 
 You can also map one Inky button to toggle the mode: set
 `toggle_button = "a"` (or `b`, `c`, `d`). Because the updater runs on a
-systemd timer, hold the button while a refresh is running (or while you start
-`birdframe.service`) to flip modes.
+systemd button-watcher service, pressing that button triggers an immediate
+refresh and flips modes in the same run.
 
 BirdWeather mode renders on the Pi from this repo's illustrations on GitHub, so there is no image set to copy over. ZIP codes with no station nearby fall back to the closest ones. If you are far from any BirdWeather station, add `--ebird-key <key>` (a free key from [ebird.org/api/keygen](https://ebird.org/api/keygen)) and the frame fills from eBird sightings instead.
 

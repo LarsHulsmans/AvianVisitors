@@ -168,6 +168,8 @@ echo "5/5  Installing systemd service + timer..."
 # pushes to the panel only when the birds change.
 sed "s|/home/monalisa/AvianVisitors/frame|$FRAME|g; s|/home/monalisa|$HOME|g; s|User=monalisa|User=$USER|" \
   systemd/birdframe.service | sudo tee /etc/systemd/system/birdframe.service >/dev/null
+sed "s|/home/monalisa/AvianVisitors/frame|$FRAME|g; s|/home/monalisa|$HOME|g; s|User=monalisa|User=$USER|" \
+  systemd/birdframe-buttons.service | sudo tee /etc/systemd/system/birdframe-buttons.service >/dev/null
 # BirdWeather's remote-ZIP eBird fallback reads its key from the unit environment.
 if [ "$MODE" = birdweather ] && [ -n "$EBIRD_KEY" ]; then
   echo "Environment=EBIRD_API_KEY=$EBIRD_KEY" | sudo tee -a /etc/systemd/system/birdframe.service >/dev/null
@@ -175,6 +177,7 @@ fi
 sudo cp systemd/birdframe.timer /etc/systemd/system/birdframe.timer
 sudo systemctl daemon-reload
 sudo systemctl enable --now birdframe.timer  # --now starts it immediately, not only on the next boot
+sudo systemctl enable --now birdframe-buttons.service
 
 case "$MODE" in
   local)

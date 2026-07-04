@@ -485,6 +485,28 @@ def run(cfg, preview=None, force=False, use_signature=True, mat_box=False):
     print("panel updated")
 
 
+def watch_button(cfg):
+    btn = str(cfg.get("toggle_button") or "").strip().lower()
+    if btn not in BUTTON_PINS:
+        raise ValueError("set toggle_button to one of: a, b, c, d")
+    try:
+        from gpiozero import Button
+    except Exception as e:
+        raise RuntimeError(f"gpio button support unavailable: {e}")
+
+    button = Button(BUTTON_PINS[btn], pull_up=True, bounce_time=0.05)
+    print(f"watching button {btn.upper()} for immediate refreshes")
+    try:
+        while True:
+            button.wait_for_press()
+            # Run immediately while the button is still down; run() will also
+            # toggle the 24h/today mode and force a redraw path for that change.
+            run(cfg, force=True, use_signature=True)
+            button.wait_for_release(timeout=2)
+    finally:
+        button.close()
+
+
 def load_config(path):
     cfg = dict(DEFAULTS)
     if path:
@@ -502,6 +524,8 @@ def main():
     ap.add_argument("--image-url")
     ap.add_argument("--preview", help="write a 6-ink preview PNG instead of pushing")
     ap.add_argument("--rotate", type=int)
+    ap.add_argument("--watch-button", action="store_true",
+                    help="watch the configured button and refresh immediately on press")
     ap.add_argument("--force", action="store_true", help="refresh even if unchanged")
     ap.add_argument("--no-signature", action="store_true", help="skip change detection")
     ap.add_argument("--mat-box", action="store_true", help="dev: outline the mat window on the preview")
@@ -514,6 +538,9 @@ def main():
             cfg[key] = val
     if args.rotate is not None:
         cfg["rotate"] = args.rotate
+    if args.watch_button:
+        watch_button(cfg)
+        return
     run(cfg, preview=args.preview, force=args.force, use_signature=not args.no_signature, mat_box=args.mat_box)
 
 
