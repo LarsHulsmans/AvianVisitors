@@ -68,18 +68,6 @@ DEFAULTS = {
     "shoot_pad_top_px": None,
     "shoot_pad_side_px": None,
     "shoot_pad_bottom_px": None,
-    "shoot_mat_full": 0.0,         # when layout_mode=full, remove stage padding
-    "shoot_collage_vh_full": 84,   # when layout_mode=full, make collage dominate
-    "shoot_headline_px_full": 32,  # when layout_mode=full, keep title compact
-    "shoot_eyebrow_px_full": 14,
-    "shoot_title_gap_px_full": 6,
-    "shoot_group_y_full": "center",  # flex-start | center | flex-end
-    "shoot_collage_lock_center_full": True,
-    "shoot_title_detached_full": True,
-    "shoot_title_offset_y_px_full": 0,
-    "shoot_pad_top_px_full": 56,
-    "shoot_pad_side_px_full": 0,
-    "shoot_pad_bottom_px_full": 0,
     "layout_mode": "framed",  # "framed" (A5 mat layout) or "full" (edge-to-edge panel)
     "mat": 0.0,             # extra global shrink of the content inside the A5 opening
     "rotate": 90,           # 90 or 270 if the frame hangs the other way up
@@ -344,23 +332,7 @@ def _layout_image(cfg, img, species):
 
 
 def _shoot_kwargs(cfg):
-    mode = _normalize_layout_mode(cfg.get("layout_mode", "framed"))
-    if mode == "full":
-        return {
-            "headline_px": cfg["shoot_headline_px_full"],
-            "eyebrow_px": cfg["shoot_eyebrow_px_full"],
-            "mat": cfg["shoot_mat_full"],
-            "collage_vh": cfg["shoot_collage_vh_full"],
-            "title_gap_px": cfg["shoot_title_gap_px_full"],
-            "group_y": cfg["shoot_group_y_full"],
-            "collage_lock_center": cfg["shoot_collage_lock_center_full"],
-            "title_detached": cfg["shoot_title_detached_full"],
-            "title_offset_y_px": cfg["shoot_title_offset_y_px_full"],
-            "pad_top_px": cfg["shoot_pad_top_px_full"],
-            "pad_side_px": cfg["shoot_pad_side_px_full"],
-            "pad_bottom_px": cfg["shoot_pad_bottom_px_full"],
-        }
-    return {
+    look = {
         "headline_px": cfg["shoot_headline_px"],
         "eyebrow_px": cfg["shoot_eyebrow_px"],
         "mat": cfg["shoot_mat"],
@@ -374,6 +346,16 @@ def _shoot_kwargs(cfg):
         "pad_side_px": cfg["shoot_pad_side_px"],
         "pad_bottom_px": cfg["shoot_pad_bottom_px"],
     }
+    if _normalize_layout_mode(cfg.get("layout_mode", "framed")) == "full":
+        look["headline_px"] = round(look["headline_px"] * 1.12)
+        look["eyebrow_px"] = round(look["eyebrow_px"] * 1.08)
+        look["collage_vh"] = min(92, round(look["collage_vh"] * 1.12))
+        look["title_gap_px"] = max(4, round(look["title_gap_px"] * 0.75))
+        look["mat"] = max(0.0, look["mat"] * 0.5)
+        look["pad_top_px"] = max(0, round((look["pad_top_px"] or 0) * 0.5))
+        look["pad_bottom_px"] = max(0, round((look["pad_bottom_px"] or 0) * 0.5))
+        look["pad_side_px"] = max(0, round((look["pad_side_px"] or 0) * 0.5))
+    return look
 
 
 def _draw_status_label(img, text):
