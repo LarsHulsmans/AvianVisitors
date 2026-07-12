@@ -642,6 +642,11 @@ def render_basic_page(config: dict[str, Any], paintings: list[dict[str, Any]], m
             <input type=\"file\" name=\"painting_file\" accept=\"image/png,image/jpeg,image/webp\" required>
             <button type=\"submit\">Upload painting</button>
         </form>
+        <form method=\"post\" action=\"/force-refresh\" class=\"card compact\">
+            <h2>Force refresh</h2>
+            <p class=\"hint\">Immediately push the current settings to the frame, even if nothing changed.</p>
+            <button class=\"primary\" type=\"submit\">Force refresh now</button>
+        </form>
     </div>
 </body>
 </html>
@@ -682,6 +687,11 @@ def render_advanced_page(config: dict[str, Any], message: str = "", error: str =
         <button type="submit" name="action" value="save">Save only</button>
         <a class="link-button" href="/">Reset view</a>
       </div>
+    </form>
+    <form method="post" action="/force-refresh" class="card compact">
+      <h2>Force refresh</h2>
+      <p class="hint">Immediately push the current settings to the frame, even if nothing changed.</p>
+      <button class="primary" type="submit">Force refresh now</button>
     </form>
   </div>
 </body>
@@ -748,6 +758,14 @@ class SettingsHandler(BaseHTTPRequestHandler):
                 self._redirect(target + "?error=" + quote_plus(str(exc)), code=HTTPStatus.SEE_OTHER)
                 return
             self._redirect(target + "?message=" + quote_plus("Saved settings"), code=HTTPStatus.SEE_OTHER)
+            return
+        if self.path == "/force-refresh":
+            try:
+                self.app.trigger_refresh()
+            except Exception as exc:  # noqa: BLE001
+                self._redirect("/?error=" + quote_plus(str(exc)), code=HTTPStatus.SEE_OTHER)
+                return
+            self._redirect("/?message=" + quote_plus("Frame refresh triggered"), code=HTTPStatus.SEE_OTHER)
             return
         if self.path == "/upload-painting":
             length = int(self.headers.get("Content-Length", "0"))
