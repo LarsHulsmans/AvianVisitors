@@ -616,12 +616,12 @@ def render_basic_page(config: dict[str, Any], paintings: list[dict[str, Any]], m
                 <p class=\"hint\">Upload JPG, PNG, or WEBP files. They are stored on the Pi in ~/.birdframe/paintings.</p>
                 <p class=\"hint\">Use the upload form below, then return here and select it.</p>
             </section>
-            {editor_block}
             <div class=\"actions card compact\">
                 <button class=\"primary\" type=\"submit\" name=\"action\" value=\"save_refresh\">Save and refresh now</button>
                 <button type=\"submit\" name=\"action\" value=\"save\">Save only</button>
             </div>
         </form>
+        {editor_block}
         <form method=\"post\" action=\"/upload-painting\" enctype=\"multipart/form-data\" class=\"card compact upload-form paintings-only\">
             <h2>Upload paintings</h2>
             <input type=\"file\" name=\"painting_file\" accept=\"image/png,image/jpeg,image/webp\" required>
