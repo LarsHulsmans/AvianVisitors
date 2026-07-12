@@ -43,6 +43,10 @@ document.addEventListener('DOMContentLoaded', () => {
       } else if (preset === '24h-framed') {
         setValue('window_mode', '24h');
         setValue('layout_mode', 'framed');
+      } else if (preset === 'vangogh-full') {
+        setValue('content_mode', 'vangogh');
+        setValue('layout_mode', 'full');
+        setValue('vangogh_painting', 'self_portrait_felt_hat');
       }
       window.scrollTo({ top: 0, behavior: 'smooth' });
     });

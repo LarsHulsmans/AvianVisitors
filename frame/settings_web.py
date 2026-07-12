@@ -396,7 +396,9 @@ def _render_presets() -> str:
         <button type="button" data-preset="today-framed">Today + framed</button>
         <button type="button" data-preset="24h-full">24h + fullscreen</button>
         <button type="button" data-preset="24h-framed">24h + framed</button>
+                <button type="button" data-preset="vangogh-full">Van Gogh fullscreen</button>
       </div>
+            <p class="hint">Use the buttons above for the common modes, including the art mode that forces fullscreen.</p>
     </section>
     """
 
