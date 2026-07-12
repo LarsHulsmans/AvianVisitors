@@ -854,11 +854,16 @@ class SettingsApp:
     def current_config(self) -> dict[str, Any]:
         return load_config(self.config_path)
 
+    def _cache_dir(self) -> Path:
+        cfg = self.current_config()
+        raw = str(cfg.get("cache", str(self.config_path.parent)) or str(self.config_path.parent))
+        return Path(os.path.expanduser(raw))
+
     def paintings_dir(self) -> Path:
-        return self.config_path.parent / "paintings"
+        return self._cache_dir() / "paintings"
 
     def painting_edits_path(self) -> Path:
-        return self.config_path.parent / "painting_edits.json"
+        return self._cache_dir() / "painting_edits.json"
 
     def _load_painting_edits(self) -> dict[str, dict[str, float]]:
         path = self.painting_edits_path()
@@ -941,6 +946,16 @@ class SettingsApp:
             "offset_y": offset_y,
         }
         self._save_painting_edits(edits)
+
+        # Keep selected painting in config so refresh shows the edited image.
+        current = self.current_config()
+        original_text = self.config_path.read_text() if self.config_path.exists() else ""
+        current["vangogh_painting"] = key
+        rendered = render_config_text(original_text, current)
+        self.config_path.parent.mkdir(parents=True, exist_ok=True)
+        self.config_path.write_text(rendered)
+        with self.config_path.open("rb") as f:
+            tomllib.load(f)
 
     def delete_painting(self, key: str) -> None:
         key = str(key or "").strip()
