@@ -39,12 +39,62 @@ function updatePaintingSelection() {
   });
 }
 
+function getEditorElements() {
+  return {
+    image: document.querySelector('#painting-live-image'),
+    keyInput: document.querySelector('#editor_painting_key'),
+    deleteKeyInput: document.querySelector('#delete_painting_key'),
+    saveScale: document.querySelector('#editor_save_scale'),
+    saveX: document.querySelector('#editor_save_offset_x'),
+    saveY: document.querySelector('#editor_save_offset_y'),
+    scale: document.querySelector('[name="editor_scale"]'),
+    offsetX: document.querySelector('[name="editor_offset_x"]'),
+    offsetY: document.querySelector('[name="editor_offset_y"]'),
+    deleteForm: document.querySelector('form[action="/delete-painting"]'),
+  };
+}
+
+function applyEditorPreview() {
+  const els = getEditorElements();
+  if (!els.image || !els.scale || !els.offsetX || !els.offsetY) return;
+  const scale = Number(els.scale.value || 1);
+  const offsetX = Number(els.offsetX.value || 0);
+  const offsetY = Number(els.offsetY.value || 0);
+  els.image.style.transform = `scale(${scale}) translate(${offsetX}%, ${offsetY}%)`;
+  els.image.style.transformOrigin = 'center center';
+  if (els.saveScale) els.saveScale.value = String(scale);
+  if (els.saveX) els.saveX.value = String(offsetX);
+  if (els.saveY) els.saveY.value = String(offsetY);
+}
+
+function loadEditorFromSelectedCard() {
+  const selected = document.querySelector('.painting-card input[type="radio"]:checked');
+  if (!selected) return;
+  const card = selected.closest('.painting-card');
+  const img = card ? card.querySelector('img') : null;
+  const els = getEditorElements();
+  if (els.keyInput) els.keyInput.value = selected.value;
+  if (els.deleteKeyInput) els.deleteKeyInput.value = selected.value;
+  if (els.deleteForm) {
+    els.deleteForm.style.display = selected.value.startsWith('local:') ? '' : 'none';
+  }
+  if (img && els.image) {
+    els.image.src = img.src;
+  }
+  if (els.scale) els.scale.value = selected.dataset.scale || '1.0';
+  if (els.offsetX) els.offsetX.value = String(Math.round((Number(selected.dataset.offsetX || '0')) * 100));
+  if (els.offsetY) els.offsetY.value = String(Math.round((Number(selected.dataset.offsetY || '0')) * 100));
+  applyEditorPreview();
+  updateRangeOutputs(document);
+}
+
 document.addEventListener('input', updateRangeOutputs);
 document.addEventListener('change', updateRangeOutputs);
 document.addEventListener('DOMContentLoaded', () => {
   updateRangeOutputs();
   updateModeSections();
   updatePaintingSelection();
+  loadEditorFromSelectedCard();
 
   document.querySelectorAll('details.card').forEach((details) => {
     details.open = false;
@@ -56,7 +106,24 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   document.querySelectorAll('.painting-card input[type="radio"]').forEach((input) => {
-    input.addEventListener('change', updatePaintingSelection);
+    input.addEventListener('change', () => {
+      updatePaintingSelection();
+      loadEditorFromSelectedCard();
+    });
+  });
+
+  ['editor_scale', 'editor_offset_x', 'editor_offset_y'].forEach((name) => {
+    const el = document.querySelector(`[name="${name}"]`);
+    if (el) {
+      el.addEventListener('input', () => {
+        applyEditorPreview();
+        updateRangeOutputs(document);
+      });
+      el.addEventListener('change', () => {
+        applyEditorPreview();
+        updateRangeOutputs(document);
+      });
+    }
   });
 
   document.querySelectorAll('[data-preset]').forEach((button) => {
@@ -85,6 +152,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       updateModeSections();
       updatePaintingSelection();
+      loadEditorFromSelectedCard();
       window.scrollTo({ top: 0, behavior: 'smooth' });
     });
   });

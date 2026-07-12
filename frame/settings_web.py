@@ -49,6 +49,8 @@ MANAGED_KEYS = [
     "content_mode",
     "vangogh_painting",
     "painting_scale",
+    "painting_cycle",
+    "painting_cycle_seconds",
     "shoot",
     "shoot_title",
     "shoot_subtitle",
@@ -112,6 +114,8 @@ FIELD_DEFS: dict[str, dict[str, Any]] = {
     "content_mode": {"label": "Display content", "kind": "select", "options": [("birds", "Birds"), ("paintings", "Paintings")], "help": "Use paintings mode to show local artwork instead of birds."},
     "vangogh_painting": {"label": "Selected painting", "kind": "text", "width": "wide", "help": "Updated by the painting gallery."},
     "painting_scale": {"label": "Painting zoom", "kind": "range", "min": 0.6, "max": 2.2, "step": 0.05, "help": "1.0 fills the frame naturally. Higher values zoom in."},
+    "painting_cycle": {"label": "Cycle paintings", "kind": "checkbox", "help": "Automatically cycle through all saved paintings."},
+    "painting_cycle_seconds": {"label": "Cycle interval (seconds)", "kind": "number", "min": 10, "max": 86400, "step": 1},
     "shoot": {"label": "Render on the Pi", "kind": "checkbox"},
     "shoot_title": {"label": "Title", "kind": "text", "width": "wide"},
     "shoot_subtitle": {"label": "Subtitle", "kind": "text", "width": "wide"},
@@ -187,6 +191,8 @@ def _default_config() -> dict[str, Any]:
         "content_mode": "birds",
         "vangogh_painting": "self_portrait_felt_hat",
         "painting_scale": 1.0,
+        "painting_cycle": False,
+        "painting_cycle_seconds": 300,
         "shoot": False,
         "shoot_title": None,
         "shoot_subtitle": None,
@@ -313,9 +319,10 @@ def _parse_form(form: dict[str, list[str]]) -> dict[str, Any]:
 
 def _parse_basic_form(form: dict[str, list[str]], config: dict[str, Any]) -> dict[str, Any]:
     out: dict[str, Any] = {}
-    for key in ("window_mode", "layout_mode", "content_mode", "vangogh_painting", "painting_scale"):
+    for key in ("window_mode", "layout_mode", "content_mode", "vangogh_painting", "painting_scale", "painting_cycle", "painting_cycle_seconds"):
         if key in form:
             out[key] = _coerce_value(key, form.get(key, [""])[0])
+    out["painting_cycle"] = "painting_cycle" in form
     mode = str(out.get("content_mode", config.get("content_mode", "birds")) or "birds")
     if mode == "paintings":
         out["layout_mode"] = "full"
@@ -466,21 +473,59 @@ def _render_presets() -> str:
     """
 
 
-def _render_painting_gallery(paintings: list[dict[str, str]], selected: str) -> str:
+def _render_painting_gallery(paintings: list[dict[str, Any]], selected: str) -> str:
     cards: list[str] = []
     for painting in paintings:
         key = painting["key"]
         checked = " checked" if key == selected else ""
         title = html.escape(painting["title"])
         src = html.escape(painting["preview"])
+        p_scale = html.escape(str(painting.get("scale", 1.0)))
+        p_x = html.escape(str(painting.get("offset_x", 0.0)))
+        p_y = html.escape(str(painting.get("offset_y", 0.0)))
+        local_badge = '<span class="painting-local">Local</span>' if bool(painting.get("is_local")) else ""
         cards.append(
             f'<label class="painting-card">'
-            f'<input type="radio" name="vangogh_painting" value="{html.escape(key)}"{checked}>'
+            f'<input type="radio" name="vangogh_painting" value="{html.escape(key)}" data-scale="{p_scale}" data-offset-x="{p_x}" data-offset-y="{p_y}"{checked}>'
             f'<img src="{src}" alt="{title}">'
-            f'<span>{title}</span>'
+            f'<span>{title}{local_badge}</span>'
             f'</label>'
         )
     return f'<div class="painting-grid">{"".join(cards)}</div>'
+
+
+def _render_painting_editor(selected: str, preview_src: str, scale: float, offset_x: float, offset_y: float) -> str:
+    ox = int(round(offset_x * 100))
+    oy = int(round(offset_y * 100))
+    delete_style = "" if selected.startswith("local:") else ' style="display:none"'
+    return f"""
+    <section class=\"card compact paintings-only\">
+      <h2>Image editor</h2>
+      <p class=\"hint\">Adjust crop and position for the selected image. Preview updates live on this page.</p>
+      <div class=\"painting-editor\">
+        <div class=\"painting-preview-wrap\" id=\"painting-live-preview\">
+          <img src=\"{html.escape(preview_src)}\" alt=\"Selected painting preview\" id=\"painting-live-image\">
+        </div>
+        <div class=\"painting-editor-controls\">
+          <div class=\"field\"><label>Zoom</label><div class=\"range-wrap\"><input type=\"range\" name=\"editor_scale\" min=\"0.6\" max=\"2.2\" step=\"0.05\" value=\"{scale}\" data-value-for=\"editor_scale\"><output data-output-for=\"editor_scale\">{scale}</output></div></div>
+          <div class=\"field\"><label>Move Left/Right</label><div class=\"range-wrap\"><input type=\"range\" name=\"editor_offset_x\" min=\"-100\" max=\"100\" step=\"1\" value=\"{ox}\" data-value-for=\"editor_offset_x\"><output data-output-for=\"editor_offset_x\">{ox}</output></div></div>
+          <div class=\"field\"><label>Move Up/Down</label><div class=\"range-wrap\"><input type=\"range\" name=\"editor_offset_y\" min=\"-100\" max=\"100\" step=\"1\" value=\"{oy}\" data-value-for=\"editor_offset_y\"><output data-output-for=\"editor_offset_y\">{oy}</output></div></div>
+        </div>
+      </div>
+      <form method=\"post\" action=\"/save-painting-edit\" class=\"editor-actions\">
+        <input type=\"hidden\" name=\"painting_key\" id=\"editor_painting_key\" value=\"{html.escape(selected)}\">
+        <input type=\"hidden\" name=\"scale\" id=\"editor_save_scale\" value=\"{scale}\">
+        <input type=\"hidden\" name=\"offset_x\" id=\"editor_save_offset_x\" value=\"{ox}\">
+        <input type=\"hidden\" name=\"offset_y\" id=\"editor_save_offset_y\" value=\"{oy}\">
+        <button type=\"submit\" name=\"action\" value=\"save\">Save crop/position</button>
+        <button class=\"primary\" type=\"submit\" name=\"action\" value=\"save_refresh\">Save and refresh now</button>
+      </form>
+      <form method=\"post\" action=\"/delete-painting\" class=\"editor-actions\"{delete_style}>
+        <input type=\"hidden\" name=\"painting_key\" id=\"delete_painting_key\" value=\"{html.escape(selected)}\">
+        <button type=\"submit\">Delete selected local image</button>
+      </form>
+    </section>
+    """
 
 
 def _config_snapshot(config: dict[str, Any]) -> str:
@@ -501,44 +546,52 @@ def _asset_version(path: Path) -> str:
 
 
 def _render_alert(message: str, error: str) -> str:
-        if error:
-                return f'<div class="alert error">{html.escape(error)}</div>'
-        if message:
-                return f'<div class="alert success">{html.escape(message)}</div>'
-        return ""
+    if error:
+        return f'<div class="alert error">{html.escape(error)}</div>'
+    if message:
+        return f'<div class="alert success">{html.escape(message)}</div>'
+    return ""
 
 
 def _render_header(config: dict[str, Any], subtitle: str, nav_link: str, nav_label: str) -> str:
-        status_bits = []
-        status_bits.append(f'<span class="status-chip">{html.escape(str(config.get("window_mode", "24h")))} window</span>')
-        status_bits.append(f'<span class="status-chip">{html.escape(str(config.get("layout_mode", "framed")))} layout</span>')
-        status_bits.append(f'<span class="status-chip">{html.escape(str(config.get("content_mode", "birds")))} content</span>')
-        return (
-                '<header class="hero card">'
-                '<div>'
-                '<p class="eyebrow">AvianVisitors</p>'
-                '<h1>Frame settings</h1>'
-                f'<p class="lede">{html.escape(subtitle)}</p>'
-                f'<p class="small"><a class="link-button" href="{nav_link}">{html.escape(nav_label)}</a></p>'
-                '</div>'
-                '<div class="hero-meta">'
-                f'<div class="status-row">{"".join(status_bits)}</div>'
-                '<p class="small">Saved to <code>~/.birdframe/config.toml</code>.</p>'
-                '</div>'
-                '</header>'
-        )
+    status_bits = []
+    status_bits.append(f'<span class="status-chip">{html.escape(str(config.get("window_mode", "24h")))} window</span>')
+    status_bits.append(f'<span class="status-chip">{html.escape(str(config.get("layout_mode", "framed")))} layout</span>')
+    status_bits.append(f'<span class="status-chip">{html.escape(str(config.get("content_mode", "birds")))} content</span>')
+    return (
+        '<header class="hero card">'
+        '<div>'
+        '<p class="eyebrow">AvianVisitors</p>'
+        '<h1>Frame settings</h1>'
+        f'<p class="lede">{html.escape(subtitle)}</p>'
+        f'<p class="small"><a class="link-button" href="{nav_link}">{html.escape(nav_label)}</a></p>'
+        '</div>'
+        '<div class="hero-meta">'
+        f'<div class="status-row">{"".join(status_bits)}</div>'
+        '<p class="small">Saved to <code>~/.birdframe/config.toml</code>.</p>'
+        '</div>'
+        '</header>'
+    )
 
 
-def render_basic_page(config: dict[str, Any], paintings: list[dict[str, str]], message: str = "", error: str = "") -> str:
-        css_version = _asset_version(FRAME_DIR / "webui" / "style.css")
-        js_version = _asset_version(FRAME_DIR / "webui" / "app.js")
-        selected = str(config.get("vangogh_painting", "self_portrait_felt_hat"))
-        gallery = _render_painting_gallery(paintings, selected)
-        content_mode = _field_value(config, "content_mode")
-        window_mode = _field_value(config, "window_mode")
-        layout_mode = _field_value(config, "layout_mode")
-        scale_field = _render_field("painting_scale", config)
-        return f"""<!doctype html>
+def render_basic_page(config: dict[str, Any], paintings: list[dict[str, Any]], message: str = "", error: str = "") -> str:
+    css_version = _asset_version(FRAME_DIR / "webui" / "style.css")
+    js_version = _asset_version(FRAME_DIR / "webui" / "app.js")
+    selected = str(config.get("vangogh_painting", "self_portrait_felt_hat"))
+    gallery = _render_painting_gallery(paintings, selected)
+    content_mode = _field_value(config, "content_mode")
+    window_mode = _field_value(config, "window_mode")
+    layout_mode = _field_value(config, "layout_mode")
+    scale_field = _render_field("painting_scale", config)
+    cycle_seconds = int(config.get("painting_cycle_seconds", 300) or 300)
+    cycle_checked = " checked" if bool(config.get("painting_cycle")) else ""
+    selected_item = next((p for p in paintings if p["key"] == selected), paintings[0] if paintings else None)
+    preview_src = selected_item["preview"] if selected_item else ""
+    selected_scale = float(selected_item.get("scale", config.get("painting_scale", 1.0)) if selected_item else config.get("painting_scale", 1.0))
+    selected_x = float(selected_item.get("offset_x", 0.0)) if selected_item else 0.0
+    selected_y = float(selected_item.get("offset_y", 0.0)) if selected_item else 0.0
+    editor_block = _render_painting_editor(selected, preview_src, selected_scale, selected_x, selected_y)
+    return f"""<!doctype html>
 <html lang=\"en\">
 <head>
     <meta charset=\"utf-8\">
@@ -559,6 +612,8 @@ def render_basic_page(config: dict[str, Any], paintings: list[dict[str, str]], m
                     <div class=\"field\"><label>Frame window</label><select name=\"window_mode\"><option value=\"24h\"{" selected" if str(window_mode)=="24h" else ""}>24 hours</option><option value=\"today\"{" selected" if str(window_mode)=="today" else ""}>Today</option></select></div>
                     <div class=\"field birds-only\"><label>Layout mode</label><select name=\"layout_mode\"><option value=\"framed\"{" selected" if str(layout_mode)=="framed" else ""}>Framed</option><option value=\"full\"{" selected" if str(layout_mode)=="full" else ""}>Fullscreen</option></select></div>
                     <div class=\"field\"><label>Display content</label><select name=\"content_mode\"><option value=\"birds\"{" selected" if str(content_mode)=="birds" else ""}>Birds</option><option value=\"paintings\"{" selected" if str(content_mode)=="paintings" else ""}>Paintings</option></select></div>
+                    <div class=\"field paintings-only\"><label class=\"checkbox\"><input type=\"checkbox\" name=\"painting_cycle\" value=\"1\"{cycle_checked}><span>Cycle all saved images</span></label></div>
+                    <div class=\"field paintings-only\"><label>Cycle interval (seconds)</label><input type=\"number\" name=\"painting_cycle_seconds\" min=\"10\" max=\"86400\" step=\"1\" value=\"{cycle_seconds}\"></div>
                 </div>
             </section>
             <section class=\"card compact paintings-only\">
@@ -572,6 +627,7 @@ def render_basic_page(config: dict[str, Any], paintings: list[dict[str, str]], m
                 <p class=\"hint\">Upload JPG, PNG, or WEBP files. They are stored on the Pi in ~/.birdframe/paintings.</p>
                 <p class=\"hint\">Use the upload form below, then return here and select it.</p>
             </section>
+            {editor_block}
             <div class=\"actions card compact\">
                 <button class=\"primary\" type=\"submit\" name=\"action\" value=\"save_refresh\">Save and refresh now</button>
                 <button type=\"submit\" name=\"action\" value=\"save\">Save only</button>
@@ -704,6 +760,38 @@ class SettingsHandler(BaseHTTPRequestHandler):
                 return
             self._redirect("/?message=" + quote_plus("Uploaded painting"), code=HTTPStatus.SEE_OTHER)
             return
+        if self.path == "/save-painting-edit":
+            length = int(self.headers.get("Content-Length", "0"))
+            payload = self.rfile.read(length).decode("utf-8")
+            form = parse_qs(payload, keep_blank_values=True)
+            key = form.get("painting_key", [""])[0]
+            action = form.get("action", ["save"])[0]
+            try:
+                self.app.save_painting_edit(
+                    key,
+                    form.get("scale", ["1.0"])[0],
+                    form.get("offset_x", ["0"])[0],
+                    form.get("offset_y", ["0"])[0],
+                )
+                if action == "save_refresh":
+                    self.app.trigger_refresh()
+            except Exception as exc:  # noqa: BLE001
+                self._redirect("/?error=" + quote_plus(str(exc)), code=HTTPStatus.SEE_OTHER)
+                return
+            self._redirect("/?message=" + quote_plus("Saved image edit"), code=HTTPStatus.SEE_OTHER)
+            return
+        if self.path == "/delete-painting":
+            length = int(self.headers.get("Content-Length", "0"))
+            payload = self.rfile.read(length).decode("utf-8")
+            form = parse_qs(payload, keep_blank_values=True)
+            key = form.get("painting_key", [""])[0]
+            try:
+                self.app.delete_painting(key)
+            except Exception as exc:  # noqa: BLE001
+                self._redirect("/?error=" + quote_plus(str(exc)), code=HTTPStatus.SEE_OTHER)
+                return
+            self._redirect("/?message=" + quote_plus("Deleted painting"), code=HTTPStatus.SEE_OTHER)
+            return
         self.send_error(HTTPStatus.NOT_FOUND)
 
     def _send_html(self, body: bytes) -> None:
@@ -769,23 +857,53 @@ class SettingsApp:
     def paintings_dir(self) -> Path:
         return self.config_path.parent / "paintings"
 
-    def list_paintings(self) -> list[dict[str, str]]:
+    def painting_edits_path(self) -> Path:
+        return self.config_path.parent / "painting_edits.json"
+
+    def _load_painting_edits(self) -> dict[str, dict[str, float]]:
+        path = self.painting_edits_path()
+        if not path.exists():
+            return {}
+        try:
+            data = json.loads(path.read_text())
+            if isinstance(data, dict):
+                return {str(k): v for k, v in data.items() if isinstance(v, dict)}
+        except Exception:  # noqa: BLE001
+            return {}
+        return {}
+
+    def _save_painting_edits(self, edits: dict[str, dict[str, float]]) -> None:
+        path = self.painting_edits_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(edits, indent=2, sort_keys=True))
+
+    def list_paintings(self) -> list[dict[str, Any]]:
         from vangogh import PAINTINGS
 
+        edits = self._load_painting_edits()
         items = [{
             "key": p["key"],
             "title": f"{p['title']} ({p['year']})",
             "preview": p["url"],
+            "is_local": False,
+            "scale": float(edits.get(p["key"], {}).get("scale", 1.0)),
+            "offset_x": float(edits.get(p["key"], {}).get("offset_x", 0.0)),
+            "offset_y": float(edits.get(p["key"], {}).get("offset_y", 0.0)),
         } for p in PAINTINGS]
         pdir = self.paintings_dir()
         if pdir.exists():
             for path in sorted(pdir.iterdir()):
                 if not path.is_file() or path.suffix.lower() not in ALLOWED_UPLOAD_EXTS:
                     continue
+                key = f"local:{path.name}"
                 items.append({
-                    "key": f"local:{path.name}",
+                    "key": key,
                     "title": path.stem.replace("_", " "),
                     "preview": f"/uploads/{quote(path.name)}",
+                    "is_local": True,
+                    "scale": float(edits.get(key, {}).get("scale", 1.0)),
+                    "offset_x": float(edits.get(key, {}).get("offset_x", 0.0)),
+                    "offset_y": float(edits.get(key, {}).get("offset_y", 0.0)),
                 })
         return items
 
@@ -805,6 +923,37 @@ class SettingsApp:
             candidate = pdir / f"{stem}-{idx}{ext}"
             idx += 1
         candidate.write_bytes(content)
+
+    def save_painting_edit(self, key: str, scale_raw: str, offset_x_raw: str, offset_y_raw: str) -> None:
+        key = str(key or "").strip()
+        if not key:
+            raise ValueError("Select a painting first")
+        try:
+            scale = max(0.6, min(2.2, float(scale_raw)))
+            offset_x = max(-1.0, min(1.0, float(offset_x_raw) / 100.0))
+            offset_y = max(-1.0, min(1.0, float(offset_y_raw) / 100.0))
+        except Exception as exc:  # noqa: BLE001
+            raise ValueError("Invalid crop values") from exc
+        edits = self._load_painting_edits()
+        edits[key] = {
+            "scale": scale,
+            "offset_x": offset_x,
+            "offset_y": offset_y,
+        }
+        self._save_painting_edits(edits)
+
+    def delete_painting(self, key: str) -> None:
+        key = str(key or "").strip()
+        if not key.startswith("local:"):
+            raise ValueError("Only local uploaded images can be deleted")
+        name = _safe_filename(key.split(":", 1)[1])
+        path = self.paintings_dir() / name
+        if path.exists() and path.is_file():
+            path.unlink()
+        edits = self._load_painting_edits()
+        if key in edits:
+            edits.pop(key, None)
+            self._save_painting_edits(edits)
 
     def save_basic_from_form(self, form: dict[str, list[str]]) -> None:
         current = self.current_config()

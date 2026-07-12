@@ -58,6 +58,8 @@ DEFAULTS = {
     "content_mode": "birds",  # birds | paintings
     "vangogh_painting": "self_portrait_felt_hat",
     "painting_scale": 1.0,
+    "painting_cycle": False,
+    "painting_cycle_seconds": 300,
     "shoot": False,         # or capture inline (needs a browser; the Zero 2 W handles it)
     "shoot_title": None, "shoot_subtitle": None,
     "shoot_subtitle_24h": None,    # optional mode override for large headline text
@@ -140,6 +142,22 @@ def _normalize_painting_scale(scale):
     return max(0.6, min(2.2, value))
 
 
+def _normalize_painting_offset(value):
+    try:
+        f = float(value)
+    except Exception:  # noqa: BLE001
+        return 0.0
+    return max(-1.0, min(1.0, f))
+
+
+def _normalize_cycle_seconds(value):
+    try:
+        s = int(float(value))
+    except Exception:  # noqa: BLE001
+        return 300
+    return max(10, min(86400, s))
+
+
 def _active_content_mode(cfg):
     return _normalize_content_mode(cfg.get("_content_mode", cfg.get("content_mode", "birds")))
 
@@ -206,6 +224,63 @@ def fetch_species(cfg, auth=None):
                         window_mode=cfg.get("_window_mode", cfg.get("window_mode", "24h")))
 
 
+def _painting_edits_path(cfg):
+    return Path(os.path.expanduser(cfg.get("cache", "~/.birdframe"))) / "painting_edits.json"
+
+
+def _load_painting_edits(cfg):
+    path = _painting_edits_path(cfg)
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text())
+        if isinstance(data, dict):
+            return {str(k): v for k, v in data.items() if isinstance(v, dict)}
+    except Exception:  # noqa: BLE001
+        return {}
+    return {}
+
+
+def _list_painting_keys(cfg):
+    from vangogh import PAINTINGS
+
+    keys = [p["key"] for p in PAINTINGS]
+    pdir = Path(os.path.expanduser(cfg.get("cache", "~/.birdframe"))) / "paintings"
+    if pdir.exists():
+        for path in sorted(pdir.iterdir()):
+            if not path.is_file() or path.suffix.lower() not in {".png", ".jpg", ".jpeg", ".webp"}:
+                continue
+            keys.append(f"local:{path.name}")
+    return keys
+
+
+def _select_active_painting_key(cfg, state, now):
+    keys = _list_painting_keys(cfg)
+    requested = str(cfg.get("vangogh_painting", "") or "").strip()
+    if not keys:
+        return requested or "self_portrait_felt_hat"
+    if requested not in keys:
+        requested = keys[0]
+    if not bool(cfg.get("painting_cycle", False)):
+        state["painting_cycle_index"] = keys.index(requested)
+        state["painting_cycle_count"] = len(keys)
+        state["last_painting_cycle_at"] = now
+        return requested
+    interval = _normalize_cycle_seconds(cfg.get("painting_cycle_seconds", 300))
+    prev_count = int(state.get("painting_cycle_count") or 0)
+    idx = int(state.get("painting_cycle_index") or -1)
+    last_at = float(state.get("last_painting_cycle_at") or 0)
+    if prev_count != len(keys) or idx < 0 or idx >= len(keys):
+        idx = keys.index(requested)
+        state["last_painting_cycle_at"] = now
+    elif now - last_at >= interval:
+        idx = (idx + 1) % len(keys)
+        state["last_painting_cycle_at"] = now
+    state["painting_cycle_index"] = idx
+    state["painting_cycle_count"] = len(keys)
+    return keys[idx]
+
+
 def _fetch_vangogh_image(cfg, timeout):
     from vangogh import PAINTINGS, painting_by_key
 
@@ -214,21 +289,32 @@ def _fetch_vangogh_image(cfg, timeout):
 
     def _fit_painting(img):
         img = img.convert("RGB")
-        scale = _normalize_painting_scale(cfg.get("painting_scale", 1.0))
+        edits = _load_painting_edits(cfg)
+        active_key = str(cfg.get("_active_painting_key", cfg.get("vangogh_painting", "")) or "")
+        edit = edits.get(active_key, {})
+        scale = _normalize_painting_scale(edit.get("scale", cfg.get("painting_scale", 1.0)))
+        offset_x = _normalize_painting_offset(edit.get("offset_x", 0.0))
+        offset_y = _normalize_painting_offset(edit.get("offset_y", 0.0))
         cover = max(PANEL_W / img.width, PANEL_H / img.height)
         factor = cover * scale
         nw = max(1, round(img.width * factor))
         nh = max(1, round(img.height * factor))
         resized = img.resize((nw, nh), Image.LANCZOS)
         canvas = Image.new("RGB", (PANEL_W, PANEL_H), (244, 239, 231))
-        ox = (nw - PANEL_W) // 2
-        oy = (nh - PANEL_H) // 2
+        max_x = max(0, nw - PANEL_W)
+        max_y = max(0, nh - PANEL_H)
+        ox = int(round(max_x / 2 + offset_x * (max_x / 2)))
+        oy = int(round(max_y / 2 + offset_y * (max_y / 2)))
+        ox = max(0, min(max_x, ox))
+        oy = max(0, min(max_y, oy))
         if nw >= PANEL_W and nh >= PANEL_H:
             return resized.crop((ox, oy, ox + PANEL_W, oy + PANEL_H))
-        canvas.paste(resized, ((PANEL_W - nw) // 2, (PANEL_H - nh) // 2))
+        px = (PANEL_W - nw) // 2
+        py = (PANEL_H - nh) // 2
+        canvas.paste(resized, (px, py))
         return canvas
 
-    requested_key = str(cfg.get("vangogh_painting", "") or "").strip()
+    requested_key = str(cfg.get("_active_painting_key", cfg.get("vangogh_painting", "")) or "").strip()
     if requested_key.startswith("local:"):
         local_name = os.path.basename(requested_key.split(":", 1)[1])
         local_path = _paintings_dir() / local_name
@@ -516,6 +602,9 @@ def load_state(path):
             "layout_mode": None,
             "content_mode": None,
             "vangogh_painting": None,
+            "painting_cycle_index": 0,
+            "painting_cycle_count": 0,
+            "last_painting_cycle_at": 0,
             "last_toggle": 0,
             "last_layout_toggle": 0,
         }
@@ -533,6 +622,9 @@ def save_state(path, sig, when, state=None):
         "layout_mode": state.get("layout_mode"),
         "content_mode": state.get("content_mode"),
         "vangogh_painting": state.get("vangogh_painting"),
+        "painting_cycle_index": state.get("painting_cycle_index", 0),
+        "painting_cycle_count": state.get("painting_cycle_count", 0),
+        "last_painting_cycle_at": state.get("last_painting_cycle_at", 0),
         "last_toggle": state.get("last_toggle", 0),
         "last_layout_toggle": state.get("last_layout_toggle", 0),
     }
@@ -637,17 +729,21 @@ def obtain_image(cfg, species=None):
 def run(cfg, preview=None, force=False, use_signature=True, mat_box=False):
     now = time.time()
     state = load_state(cfg["state"])
+    prev_painting = state.get("vangogh_painting")
     if _active_content_mode(cfg) == "paintings":
         cfg["layout_mode"] = "full"
         cfg["_layout_mode"] = "full"
         cfg["_content_mode"] = "paintings"
+        cfg["_active_painting_key"] = _select_active_painting_key(cfg, state, now)
+    else:
+        cfg["_active_painting_key"] = cfg.get("vangogh_painting")
     if not cfg.get("_layout_mode_from_config") and state.get("layout_mode"):
         cfg["_layout_mode"] = _normalize_layout_mode(state.get("layout_mode"))
     if not cfg.get("_content_mode_from_config") and state.get("content_mode"):
         cfg["_content_mode"] = _normalize_content_mode(state.get("content_mode"))
     state["layout_mode"] = _active_layout_mode(cfg)
     state["content_mode"] = _active_content_mode(cfg)
-    state["vangogh_painting"] = cfg.get("vangogh_painting")
+    state["vangogh_painting"] = cfg.get("_active_painting_key", cfg.get("vangogh_painting"))
     before_mode = _normalize_window_mode(state.get("window_mode") or cfg.get("window_mode", "24h"))
     cfg["_window_mode"] = _apply_button_toggle(cfg, state)
     cfg.pop("_button_pressed", None)
@@ -661,7 +757,8 @@ def run(cfg, preview=None, force=False, use_signature=True, mat_box=False):
         except Exception as e:
             print(f"signature fetch failed: {e}", file=sys.stderr)  # treat as no change
     heal_due = now - state.get("last_refresh", 0) >= cfg["heal_hours"] * 3600
-    changed = toggled or (_active_content_mode(cfg) == "paintings" and cfg.get("vangogh_painting") != state.get("vangogh_painting")) or (not use_signature) or (sig is not None and sig != state.get("signature"))
+    changed_painting = _active_content_mode(cfg) == "paintings" and state.get("vangogh_painting") != prev_painting
+    changed = toggled or changed_painting or (not use_signature) or (sig is not None and sig != state.get("signature"))
     if not force and not preview:
         if in_quiet_hours(cfg, datetime.now().hour):
             print("quiet hours; skip")
@@ -803,6 +900,8 @@ def load_config(path):
     cfg["layout_mode"] = _normalize_layout_mode(cfg.get("layout_mode", "framed"))
     cfg["content_mode"] = _normalize_content_mode(cfg.get("content_mode", "birds"))
     cfg["painting_scale"] = _normalize_painting_scale(cfg.get("painting_scale", 1.0))
+    cfg["painting_cycle"] = bool(cfg.get("painting_cycle", False))
+    cfg["painting_cycle_seconds"] = _normalize_cycle_seconds(cfg.get("painting_cycle_seconds", 300))
     if cfg["content_mode"] == "paintings":
         cfg["layout_mode"] = "full"
     # Lock layout mode at process start so button-based window toggles can

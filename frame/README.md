@@ -67,7 +67,7 @@ Each one enables SPI + I2C, installs the deps and a systemd timer, writes `~/.bi
 
 After install, open the local settings UI at <http://birdpic.local:8080>. The default page is a simple editor for day window, framed/fullscreen, and birds vs paintings. The full control panel is at <http://birdpic.local:8080/advanced>.
 
-Paintings mode includes a visual chooser and local uploads. Uploaded files are stored on the Pi in `~/.birdframe/paintings`, and `painting_scale` controls zoom/crop fit on the frame.
+Paintings mode includes a visual chooser, local uploads, a live crop/position editor, delete for local files, and a slideshow option to cycle all saved images. Uploaded files are stored on the Pi in `~/.birdframe/paintings` and per-image edits are stored in `~/.birdframe/painting_edits.json`.
 
 If you pull a new repo version later, re-run `./install.sh` from `frame/` to refresh the services, then revisit the same URL.
 
