@@ -272,6 +272,9 @@ def _format_value(value: Any) -> str:
 def _strip_managed_keys(text: str) -> str:
     out_lines: list[str] = []
     for line in text.splitlines():
+        # Always drop the managed-block marker so it never duplicates.
+        if line.strip() == "# Managed by the AvianVisitors web UI":
+            continue
         stripped = line.lstrip()
         if not stripped or stripped.startswith("#") or stripped.startswith("["):
             out_lines.append(line)
