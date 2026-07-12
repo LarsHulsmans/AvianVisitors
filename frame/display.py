@@ -636,7 +636,13 @@ def save_state(path, sig, when, state=None):
 
 
 def _apply_button_toggle(cfg, state):
-    cur = _normalize_window_mode(state.get("window_mode") or cfg.get("window_mode", "24h"))
+    # When window_mode is explicitly written to config, it takes priority over
+    # state (which preserves the last button-toggle). State only wins when the
+    # user hasn't set window_mode in the config at all.
+    if cfg.get("_window_mode_from_config"):
+        cur = _normalize_window_mode(cfg.get("window_mode", "24h"))
+    else:
+        cur = _normalize_window_mode(state.get("window_mode") or cfg.get("window_mode", "24h"))
     state["window_mode"] = cur
     btn = str(cfg.get("toggle_button") or "").strip().lower()
     if btn not in BUTTON_PINS:
@@ -890,11 +896,13 @@ def load_config(path):
     cfg = dict(DEFAULTS)
     layout_mode_from_config = False
     content_mode_from_config = False
+    window_mode_from_config = False
     if path:
         with open(os.path.expanduser(path), "rb") as f:
             data = tomllib.load(f)
         layout_mode_from_config = "layout_mode" in data
         content_mode_from_config = "content_mode" in data
+        window_mode_from_config = "window_mode" in data
         cfg.update(data)
     cfg["window_mode"] = _normalize_window_mode(cfg.get("window_mode", "24h"))
     cfg["layout_mode"] = _normalize_layout_mode(cfg.get("layout_mode", "framed"))
@@ -910,6 +918,7 @@ def load_config(path):
     cfg["_layout_mode_from_config"] = layout_mode_from_config
     cfg["_content_mode"] = cfg["content_mode"]
     cfg["_content_mode_from_config"] = content_mode_from_config
+    cfg["_window_mode_from_config"] = window_mode_from_config
     return cfg
 
 
