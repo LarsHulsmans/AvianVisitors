@@ -60,12 +60,33 @@ function applyEditorPreview() {
   const scale = Number(els.scale.value || 1);
   const offsetX = Number(els.offsetX.value || 0);
   const offsetY = Number(els.offsetY.value || 0);
-  // Limit translation to the extra area introduced by zoom.
-  const maxShift = Math.max(0, (scale - 1) * 50);
-  const shiftX = (Math.max(-100, Math.min(100, offsetX)) / 100) * maxShift;
-  const shiftY = (Math.max(-100, Math.min(100, offsetY)) / 100) * maxShift;
-  els.image.style.transform = `translate(${shiftX}%, ${shiftY}%) scale(${scale})`;
-  els.image.style.transformOrigin = 'center center';
+  const wrap = els.image.parentElement;
+  if (!wrap) return;
+
+  const naturalW = els.image.naturalWidth || 0;
+  const naturalH = els.image.naturalHeight || 0;
+  const wrapW = wrap.clientWidth || 0;
+  const wrapH = wrap.clientHeight || 0;
+  if (naturalW <= 0 || naturalH <= 0 || wrapW <= 0 || wrapH <= 0) return;
+
+  // Mirror the renderer's cover + crop behavior so preview == saved output.
+  const cover = Math.max(wrapW / naturalW, wrapH / naturalH);
+  const drawW = Math.max(1, Math.round(naturalW * cover * scale));
+  const drawH = Math.max(1, Math.round(naturalH * cover * scale));
+  const maxX = Math.max(0, drawW - wrapW);
+  const maxY = Math.max(0, drawH - wrapH);
+  const normX = Math.max(-100, Math.min(100, offsetX)) / 100;
+  const normY = Math.max(-100, Math.min(100, offsetY)) / 100;
+  const cropX = Math.round(maxX / 2 + normX * (maxX / 2));
+  const cropY = Math.round(maxY / 2 + normY * (maxY / 2));
+
+  els.image.style.width = `${drawW}px`;
+  els.image.style.height = `${drawH}px`;
+  els.image.style.maxWidth = 'none';
+  els.image.style.maxHeight = 'none';
+  els.image.style.left = `${-cropX}px`;
+  els.image.style.top = `${-cropY}px`;
+  els.image.style.transform = 'none';
   if (els.saveScale) els.saveScale.value = String(scale);
   if (els.saveX) els.saveX.value = String(offsetX);
   if (els.saveY) els.saveY.value = String(offsetY);
@@ -84,6 +105,9 @@ function loadEditorFromSelectedCard() {
   }
   if (img && els.image) {
     els.image.src = img.src;
+    els.image.onload = () => {
+      applyEditorPreview();
+    };
   }
   if (els.scale) els.scale.value = selected.dataset.scale || '1.0';
   if (els.offsetX) els.offsetX.value = String(Math.round((Number(selected.dataset.offsetX || '0')) * 100));
@@ -128,6 +152,10 @@ document.addEventListener('DOMContentLoaded', () => {
         updateRangeOutputs(document);
       });
     }
+  });
+
+  window.addEventListener('resize', () => {
+    applyEditorPreview();
   });
 
   document.querySelectorAll('[data-preset]').forEach((button) => {

@@ -345,10 +345,11 @@ output {
 }
 
 .painting-preview-wrap img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  transition: transform 120ms linear;
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: block;
+  transition: left 120ms linear, top 120ms linear, width 120ms linear, height 120ms linear;
 }
 
 .painting-editor-controls {
