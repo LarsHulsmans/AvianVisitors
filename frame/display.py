@@ -195,12 +195,25 @@ def fetch_species(cfg, auth=None):
 
 
 def _fetch_vangogh_image(cfg, timeout):
-    from vangogh import painting_by_key
+    from vangogh import PAINTINGS, painting_by_key
 
-    painting = painting_by_key(cfg.get("vangogh_painting", ""))
-    req = urllib.request.Request(painting["url"], headers={"User-Agent": "AvianVisitors-frame/1.0"})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        return Image.open(io.BytesIO(r.read(20_000_000))).convert("RGB")
+    requested = painting_by_key(cfg.get("vangogh_painting", ""))
+    titles = [requested] + [painting for painting in PAINTINGS if painting["key"] != requested["key"]]
+    last_error = None
+    for painting in titles:
+        try:
+            req = urllib.request.Request(painting["url"], headers={"User-Agent": "AvianVisitors-frame/1.0"})
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                return Image.open(io.BytesIO(r.read(20_000_000))).convert("RGB")
+        except Exception as exc:  # noqa: BLE001
+            last_error = exc
+    img = Image.new("RGB", (PANEL_W, PANEL_H), (244, 239, 231))
+    draw = ImageDraw.Draw(img)
+    message = f"Van Gogh art unavailable\n{requested['title']}"
+    draw.multiline_text((80, 120), message, fill=(45, 41, 36), spacing=16, align="left")
+    if last_error is not None:
+        draw.text((80, 260), str(last_error), fill=(107, 98, 88))
+    return img
 
 
 # --- image ------------------------------------------------------------------
