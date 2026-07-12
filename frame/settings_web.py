@@ -878,33 +878,18 @@ class SettingsApp:
 
     def current_config(self) -> dict[str, Any]:
         cfg = load_config(self.config_path)
-        # Overlay state so the UI shows the values the renderer is actually using.
+        # The basic form always writes window_mode, layout_mode and content_mode
+        # explicitly to config, so the config is the source of truth for those.
+        # We only need state for vangogh_painting, which tracks the active image
+        # during slideshow cycling.
         state_path = Path(os.path.expanduser(cfg.get("state", "~/.birdframe/state.json")))
-        if not state_path.exists():
-            return cfg
-        try:
-            state = json.loads(state_path.read_text())
-        except Exception:  # noqa: BLE001
-            return cfg
-        # Find which keys are explicitly present in the TOML config file.
-        toml_keys: set[str] = set()
-        if self.config_path.exists():
+        if state_path.exists():
             try:
-                toml_keys = set(tomllib.loads(self.config_path.read_text()))
+                state = json.loads(state_path.read_text())
+                if state.get("vangogh_painting"):
+                    cfg["vangogh_painting"] = state["vangogh_painting"]
             except Exception:  # noqa: BLE001
                 pass
-        # window_mode: config wins when explicitly set (mirrors _apply_button_toggle),
-        # otherwise state wins (tracks physical button presses).
-        if "window_mode" not in toml_keys and state.get("window_mode"):
-            cfg["window_mode"] = state["window_mode"]
-        # layout_mode / content_mode: same pattern as run() in display.py.
-        if "layout_mode" not in toml_keys and state.get("layout_mode"):
-            cfg["layout_mode"] = state["layout_mode"]
-        if "content_mode" not in toml_keys and state.get("content_mode"):
-            cfg["content_mode"] = state["content_mode"]
-        # vangogh_painting: state tracks the active image during cycling.
-        if state.get("vangogh_painting"):
-            cfg["vangogh_painting"] = state["vangogh_painting"]
         return cfg
 
     def _cache_dir(self) -> Path:
