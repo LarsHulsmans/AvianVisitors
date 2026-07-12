@@ -119,7 +119,6 @@ elif [ "$MODE" = local ]; then
 # This Pi screenshots birdnet.local itself, so there is nothing else to set up.
 base_url = "http://birdnet.local"
 window_mode = "24h"
-# toggle_button = "a" # hold during refresh to toggle 24h/today
 content_mode = "birds"
 shoot = true
 shoot_title = "Avian Visitors"
@@ -172,8 +171,6 @@ echo "5/5  Installing systemd service + timer..."
 sed "s|/home/monalisa/AvianVisitors/frame|$FRAME|g; s|/home/monalisa|$HOME|g; s|User=monalisa|User=$USER|" \
   systemd/birdframe.service | sudo tee /etc/systemd/system/birdframe.service >/dev/null
 sed "s|/home/monalisa/AvianVisitors/frame|$FRAME|g; s|/home/monalisa|$HOME|g; s|User=monalisa|User=$USER|" \
-  systemd/birdframe-buttons.service | sudo tee /etc/systemd/system/birdframe-buttons.service >/dev/null
-sed "s|/home/monalisa/AvianVisitors/frame|$FRAME|g; s|/home/monalisa|$HOME|g; s|User=monalisa|User=$USER|" \
   systemd/birdframe-web.service | sudo tee /etc/systemd/system/birdframe-web.service >/dev/null
 # BirdWeather's remote-ZIP eBird fallback reads its key from the unit environment.
 if [ "$MODE" = birdweather ] && [ -n "$EBIRD_KEY" ]; then
@@ -182,7 +179,6 @@ fi
 sudo cp systemd/birdframe.timer /etc/systemd/system/birdframe.timer
 sudo systemctl daemon-reload
 sudo systemctl enable --now birdframe.timer  # --now starts it immediately, not only on the next boot
-sudo systemctl enable --now birdframe-buttons.service
 sudo systemctl enable --now birdframe-web.service
 
 case "$MODE" in

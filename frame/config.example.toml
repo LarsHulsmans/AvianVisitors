@@ -24,7 +24,6 @@ shoot = true
 
 hours = 24             # window shown on the frame
 window_mode = "24h"   # "24h" (rolling) or "today" (since local midnight)
-# toggle_button = "a"  # press this Inky button to refresh now + toggle 24h/today
 status_text_24h = "24H"     # top-right label text when window_mode is 24h
 status_text_today = "TODAY" # top-right label text when window_mode is today
 

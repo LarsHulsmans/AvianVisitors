@@ -49,8 +49,6 @@ DEFAULTS = {
     "bw_country": "us",     # geocoder country for the ZIP
     "hours": 24,
     "window_mode": "24h",   # "24h" (rolling) or "today" (since local midnight)
-    "toggle_button": "a",   # Inky button (a/b/c/d) checked each run; hold to toggle mode
-    "layout_toggle_button": "b",  # Inky button that toggles framed/full layout
     "status_text_24h": "24H",      # top-right status label when mode is 24h
     "status_text_today": "TODAY",  # top-right status label when mode is today
     "image": "",            # local PNG written by the shooter
@@ -90,9 +88,6 @@ DEFAULTS = {
     "timeout": 45,
     "basic_user": None, "basic_pass": None,
 }
-
-BUTTON_PINS = {"a": 5, "b": 6, "c": 16, "d": 24}
-
 
 def _auth(cfg):
     if not cfg.get("basic_user"):
@@ -625,41 +620,12 @@ def save_state(path, sig, when, state=None):
         "painting_cycle_index": state.get("painting_cycle_index", 0),
         "painting_cycle_count": state.get("painting_cycle_count", 0),
         "last_painting_cycle_at": state.get("last_painting_cycle_at", 0),
-        "last_toggle": state.get("last_toggle", 0),
-        "last_layout_toggle": state.get("last_layout_toggle", 0),
     }
     with open(tmp, "w") as f:
         json.dump(payload, f)
         f.flush()
         os.fsync(f.fileno())
     os.replace(tmp, path)  # atomic: a power cut can't leave a half-written file
-
-
-def _apply_button_toggle(cfg, state):
-    # When window_mode is explicitly written to config, it takes priority over
-    # state (which preserves the last button-toggle). State only wins when the
-    # user hasn't set window_mode in the config at all.
-    if cfg.get("_window_mode_from_config"):
-        cur = _normalize_window_mode(cfg.get("window_mode", "24h"))
-    else:
-        cur = _normalize_window_mode(state.get("window_mode") or cfg.get("window_mode", "24h"))
-    state["window_mode"] = cur
-    btn = str(cfg.get("toggle_button") or "").strip().lower()
-    if btn not in BUTTON_PINS:
-        return cur
-    # The dedicated watcher service owns the GPIO pin and sets _button_pressed
-    # before calling run(). Timer/manual runs should never touch GPIO directly,
-    # otherwise they'd collide with the watcher and fail with "GPIO busy".
-    if not cfg.get("_button_pressed"):
-        return cur
-    now = time.time()
-    if now - float(state.get("last_toggle") or 0) < 2:
-        return cur
-    nxt = "today" if cur == "24h" else "24h"
-    state["window_mode"] = nxt
-    state["last_toggle"] = now
-    print(f"window mode toggled to {nxt} via button {btn.upper()}")
-    return nxt
 
 
 def in_quiet_hours(cfg, hour):
@@ -750,10 +716,11 @@ def run(cfg, preview=None, force=False, use_signature=True, mat_box=False):
     state["layout_mode"] = _active_layout_mode(cfg)
     state["content_mode"] = _active_content_mode(cfg)
     state["vangogh_painting"] = cfg.get("_active_painting_key", cfg.get("vangogh_painting"))
-    before_mode = _normalize_window_mode(state.get("window_mode") or cfg.get("window_mode", "24h"))
-    cfg["_window_mode"] = _apply_button_toggle(cfg, state)
-    cfg.pop("_button_pressed", None)
-    toggled = cfg["_window_mode"] != before_mode
+    if cfg.get("_window_mode_from_config"):
+        cfg["_window_mode"] = _normalize_window_mode(cfg.get("window_mode", "24h"))
+    else:
+        cfg["_window_mode"] = _normalize_window_mode(state.get("window_mode") or cfg.get("window_mode", "24h"))
+    state["window_mode"] = cfg["_window_mode"]
     sig = None
     species = None
     if use_signature:
@@ -764,7 +731,7 @@ def run(cfg, preview=None, force=False, use_signature=True, mat_box=False):
             print(f"signature fetch failed: {e}", file=sys.stderr)  # treat as no change
     heal_due = now - state.get("last_refresh", 0) >= cfg["heal_hours"] * 3600
     changed_painting = _active_content_mode(cfg) == "paintings" and state.get("vangogh_painting") != prev_painting
-    changed = toggled or changed_painting or (not use_signature) or (sig is not None and sig != state.get("signature"))
+    changed = changed_painting or (not use_signature) or (sig is not None and sig != state.get("signature"))
     if not force and not preview:
         if in_quiet_hours(cfg, datetime.now().hour):
             print("quiet hours; skip")
@@ -772,10 +739,7 @@ def run(cfg, preview=None, force=False, use_signature=True, mat_box=False):
         if not changed and not heal_due:
             print("no change; skip")
             return
-        if toggled:
-            print("refresh: mode toggled")
-        else:
-            print("refresh:", "changed" if changed else "heal")
+        print("refresh:", "changed" if changed else "heal")
 
     try:
         img = fit_panel(obtain_image(cfg, species))
@@ -803,95 +767,6 @@ def run(cfg, preview=None, force=False, use_signature=True, mat_box=False):
     print("panel updated")
 
 
-def watch_button(cfg):
-    btn = str(cfg.get("toggle_button") or "").strip().lower()
-    layout_btn = str(cfg.get("layout_toggle_button") or "").strip().lower()
-    if btn not in BUTTON_PINS:
-        raise ValueError("set toggle_button to one of: a, b, c, d")
-    if layout_btn and layout_btn not in BUTTON_PINS:
-        raise ValueError("set layout_toggle_button to one of: a, b, c, d")
-    try:
-        from gpiozero import Button
-    except Exception as e:
-        raise RuntimeError(f"gpio button support unavailable: {e}")
-
-    button = Button(BUTTON_PINS[btn], pull_up=True, bounce_time=0.05)
-    layout_button = None
-    if layout_btn and layout_btn != btn:
-        layout_button = Button(BUTTON_PINS[layout_btn], pull_up=True, bounce_time=0.05)
-    stop_requested = False
-
-    def _request_stop(signum, frame):
-        nonlocal stop_requested
-        stop_requested = True
-
-    previous_sigterm = signal.signal(signal.SIGTERM, _request_stop)
-    previous_sigint = signal.signal(signal.SIGINT, _request_stop)
-    if layout_button:
-        print(f"watching button {btn.upper()} for 24h/today and {layout_btn.upper()} for framed/full")
-    else:
-        print(f"watching button {btn.upper()} for immediate refreshes")
-
-    mode_down = False
-    layout_down = False
-
-    def _fresh_cfg():
-        if cfg.get("_config_path"):
-            run_cfg = load_config(cfg.get("_config_path"))
-            run_cfg["_config_path"] = cfg.get("_config_path")
-            return run_cfg
-        return cfg
-
-    def _toggle_layout_and_run(run_cfg):
-        state = load_state(run_cfg["state"])
-        now = time.time()
-        if now - float(state.get("last_layout_toggle") or 0) < 2:
-            return
-        cur = _normalize_layout_mode(state.get("layout_mode") or _active_layout_mode(run_cfg))
-        nxt = "full" if cur == "framed" else "framed"
-        state["layout_mode"] = nxt
-        state["last_layout_toggle"] = now
-        run_cfg["_layout_mode"] = nxt
-        run_cfg["_layout_mode_from_config"] = False
-        save_state(run_cfg["state"], state.get("signature"), state.get("last_refresh", 0), state)
-        print(f"layout mode toggled to {nxt} via button {layout_btn.upper()}")
-        run(run_cfg, force=True, use_signature=False)
-
-    try:
-        while not stop_requested:
-            if button.is_pressed:
-                if not mode_down:
-                    mode_down = True
-                    if stop_requested:
-                        break
-                    # Run immediately while the button is still down; run() will also
-                    # toggle the 24h/today mode and force a redraw path for that change.
-                    print(f"button {btn.upper()} pressed; refreshing now")
-                    run_cfg = _fresh_cfg()
-                    run_cfg["_button_pressed"] = True
-                    run(run_cfg, force=True, use_signature=False)
-            else:
-                mode_down = False
-
-            if layout_button and layout_button.is_pressed:
-                if not layout_down:
-                    layout_down = True
-                    if stop_requested:
-                        break
-                    run_cfg = _fresh_cfg()
-                    _toggle_layout_and_run(run_cfg)
-            else:
-                layout_down = False
-
-            time.sleep(0.1)
-    finally:
-        signal.signal(signal.SIGTERM, previous_sigterm)
-        signal.signal(signal.SIGINT, previous_sigint)
-        button.close()
-        if layout_button:
-            layout_button.close()
-
-
 def load_config(path):
     cfg = dict(DEFAULTS)
     layout_mode_from_config = False
@@ -912,8 +787,6 @@ def load_config(path):
     cfg["painting_cycle_seconds"] = _normalize_cycle_seconds(cfg.get("painting_cycle_seconds", 300))
     if cfg["content_mode"] == "paintings":
         cfg["layout_mode"] = "full"
-    # Lock layout mode at process start so button-based window toggles can
-    # never drift fullscreen runs back to framed until the service restarts.
     cfg["_layout_mode"] = cfg["layout_mode"]
     cfg["_layout_mode_from_config"] = layout_mode_from_config
     cfg["_content_mode"] = cfg["content_mode"]
@@ -930,8 +803,6 @@ def main():
     ap.add_argument("--image-url")
     ap.add_argument("--preview", help="write a 6-ink preview PNG instead of pushing")
     ap.add_argument("--rotate", type=int)
-    ap.add_argument("--watch-button", action="store_true",
-                    help="watch the configured button and refresh immediately on press")
     ap.add_argument("--force", action="store_true", help="refresh even if unchanged")
     ap.add_argument("--no-signature", action="store_true", help="skip change detection")
     ap.add_argument("--mat-box", action="store_true", help="dev: outline the mat window on the preview")
@@ -945,9 +816,6 @@ def main():
             cfg[key] = val
     if args.rotate is not None:
         cfg["rotate"] = args.rotate
-    if args.watch_button:
-        watch_button(cfg)
-        return
     run(cfg, preview=args.preview, force=args.force, use_signature=not args.no_signature, mat_box=args.mat_box)
 
 
