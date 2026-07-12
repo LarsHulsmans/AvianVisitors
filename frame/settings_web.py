@@ -29,7 +29,7 @@ except ModuleNotFoundError:  # Python < 3.11
 FRAME_DIR = Path(__file__).resolve().parent
 DEFAULT_CONFIG_PATH = Path.home() / ".birdframe" / "config.toml"
 DEFAULT_HOST = "0.0.0.0"
-DEFAULT_PORT = 8080
+DEFAULT_PORT = 80
 ALLOWED_UPLOAD_EXTS = {".png", ".jpg", ".jpeg", ".webp"}
 
 MANAGED_KEYS = [

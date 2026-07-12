@@ -9,8 +9,10 @@ After=network-online.target
 Type=simple
 User=monalisa
 WorkingDirectory=/home/monalisa/AvianVisitors/frame
-ExecStart=/home/monalisa/AvianVisitors/frame/.venv/bin/python /home/monalisa/AvianVisitors/frame/settings_web.py --config /home/monalisa/.birdframe/config.toml --bind 0.0.0.0 --port 8080
+ExecStart=/home/monalisa/AvianVisitors/frame/.venv/bin/python /home/monalisa/AvianVisitors/frame/settings_web.py --config /home/monalisa/.birdframe/config.toml --bind 0.0.0.0 --port 80
 Environment=PYTHONUNBUFFERED=1
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 Nice=10
 Restart=always
 RestartSec=2
