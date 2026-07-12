@@ -60,7 +60,11 @@ function applyEditorPreview() {
   const scale = Number(els.scale.value || 1);
   const offsetX = Number(els.offsetX.value || 0);
   const offsetY = Number(els.offsetY.value || 0);
-  els.image.style.transform = `scale(${scale}) translate(${offsetX}%, ${offsetY}%)`;
+  // Limit translation to the extra area introduced by zoom.
+  const maxShift = Math.max(0, (scale - 1) * 50);
+  const shiftX = (Math.max(-100, Math.min(100, offsetX)) / 100) * maxShift;
+  const shiftY = (Math.max(-100, Math.min(100, offsetY)) / 100) * maxShift;
+  els.image.style.transform = `translate(${shiftX}%, ${shiftY}%) scale(${scale})`;
   els.image.style.transformOrigin = 'center center';
   if (els.saveScale) els.saveScale.value = String(scale);
   if (els.saveX) els.saveX.value = String(offsetX);
