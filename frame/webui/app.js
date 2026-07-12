@@ -24,6 +24,10 @@ document.addEventListener('change', updateRangeOutputs);
 document.addEventListener('DOMContentLoaded', () => {
   updateRangeOutputs();
 
+  document.querySelectorAll('details.card').forEach((details) => {
+    details.open = false;
+  });
+
   document.querySelectorAll('[data-preset]').forEach((button) => {
     button.addEventListener('click', () => {
       const preset = button.dataset.preset;

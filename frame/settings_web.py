@@ -411,12 +411,21 @@ def _config_snapshot(config: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _asset_version(path: Path) -> str:
+    try:
+        return str(int(path.stat().st_mtime))
+    except OSError:
+        return "0"
+
+
 def render_page(config: dict[str, Any], message: str = "", error: str = "") -> str:
     sections = [
         _render_presets(),
         *(_render_collapsed_section(title, names, config) for title, names in SECTION_ORDER),
     ]
     snapshot = html.escape(_config_snapshot(config))
+    css_version = _asset_version(FRAME_DIR / "webui" / "style.css")
+    js_version = _asset_version(FRAME_DIR / "webui" / "app.js")
     status_bits = []
     status_bits.append(f'<span class="status-chip">{html.escape(str(config.get("window_mode", "24h")))} window</span>')
     status_bits.append(f'<span class="status-chip">{html.escape(str(config.get("layout_mode", "framed")))} layout</span>')
@@ -432,8 +441,8 @@ def render_page(config: dict[str, Any], message: str = "", error: str = "") -> s
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>AvianVisitors Frame Settings</title>
-  <link rel="stylesheet" href="/static/style.css">
-  <script defer src="/static/app.js"></script>
+    <link rel="stylesheet" href="/static/style.css?v={css_version}">
+    <script defer src="/static/app.js?v={js_version}"></script>
 </head>
 <body>
   <div class="shell">
