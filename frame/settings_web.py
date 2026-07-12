@@ -766,12 +766,15 @@ class SettingsHandler(BaseHTTPRequestHandler):
             form = parse_qs(payload, keep_blank_values=True)
             key = form.get("painting_key", [""])[0]
             action = form.get("action", ["save"])[0]
+            scale_raw = form.get("scale", form.get("editor_scale", ["1.0"]))[0]
+            offset_x_raw = form.get("offset_x", form.get("editor_offset_x", ["0"]))[0]
+            offset_y_raw = form.get("offset_y", form.get("editor_offset_y", ["0"]))[0]
             try:
                 self.app.save_painting_edit(
                     key,
-                    form.get("scale", ["1.0"])[0],
-                    form.get("offset_x", ["0"])[0],
-                    form.get("offset_y", ["0"])[0],
+                    scale_raw,
+                    offset_x_raw,
+                    offset_y_raw,
                 )
                 if action == "save_refresh":
                     self.app.trigger_refresh()

@@ -60,6 +60,12 @@ function applyEditorPreview() {
   const scale = Number(els.scale.value || 1);
   const offsetX = Number(els.offsetX.value || 0);
   const offsetY = Number(els.offsetY.value || 0);
+
+  // Always keep form save fields in sync, even if preview cannot be drawn yet.
+  if (els.saveScale) els.saveScale.value = String(scale);
+  if (els.saveX) els.saveX.value = String(offsetX);
+  if (els.saveY) els.saveY.value = String(offsetY);
+
   const wrap = els.image.parentElement;
   if (!wrap) return;
 
@@ -87,9 +93,6 @@ function applyEditorPreview() {
   els.image.style.left = `${-cropX}px`;
   els.image.style.top = `${-cropY}px`;
   els.image.style.transform = 'none';
-  if (els.saveScale) els.saveScale.value = String(scale);
-  if (els.saveX) els.saveX.value = String(offsetX);
-  if (els.saveY) els.saveY.value = String(offsetY);
 }
 
 function loadEditorFromSelectedCard() {
