@@ -120,6 +120,7 @@ elif [ "$MODE" = local ]; then
 base_url = "http://birdnet.local"
 window_mode = "24h"
 # toggle_button = "a" # hold during refresh to toggle 24h/today
+content_mode = "birds"
 shoot = true
 shoot_title = "Avian Visitors"
 shoot_subtitle = "Heard Today"
@@ -138,6 +139,7 @@ elif [ "$MODE" = image ]; then
     printf '%s\n' '# AvianVisitors frame, image mode: fetches a ready-made frame PNG.'
     printf 'base_url = "%s"\n' "$BASE"
     printf '%s\n' 'window_mode = "24h"'
+    printf '%s\n' 'content_mode = "birds"'
     printf 'image_url = "%s"\n' "$IMAGE_URL"
     printf '%s\n' 'shoot = false'
     printf '%s\n' 'rotate = 90          # flip to 270 if the frame hangs the other way up'
@@ -152,6 +154,7 @@ else
     printf '%s\n' 'species_source = "birdweather"'
     printf 'zip = "%s"\n' "$ZIP"
     printf '%s\n' 'window_mode = "24h"'
+    printf '%s\n' 'content_mode = "birds"'
     printf '%s\n' 'bw_days = 7          # BirdWeather lookback window, in days'
     printf '%s\n' 'bw_country = "us"    # geocoder country for the ZIP'
     printf '%s\n' 'shoot = true         # this Pi renders the collage'
@@ -193,6 +196,9 @@ shows a plain title card. If the panel hangs upside down, set rotate = 270 in
 
 Open the local settings UI at http://birdpic.local:8080 to change 24h/today,
 fullscreen/framed, title placement, and the other frame controls.
+
+The settings page also includes a Van Gogh art mode with a few portrait-only
+paintings. That mode forces fullscreen on the panel.
 DONE
     ;;
   image)
@@ -214,6 +220,9 @@ you on the Pi and refreshes every 15 min, only when the local top birds change.
 
 Open the local settings UI at http://birdpic.local:8080 to change 24h/today,
 fullscreen/framed, and the title/alignment controls after install.
+
+The same settings page includes a Van Gogh art mode with portrait paintings
+that render fullscreen only.
 DONE
     # The bundled illustrations center on the western U.S. If birds near this ZIP
     # aren't in the cloned set the frame quietly skips them, which has tripped

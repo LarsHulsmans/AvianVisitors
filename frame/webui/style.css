@@ -44,6 +44,47 @@ body {
   backdrop-filter: blur(14px);
 }
 
+details.card {
+  padding: 0;
+  overflow: hidden;
+}
+
+details.card > summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 22px 22px 10px;
+  font: 700 1.2rem/1.1 Georgia, "Iowan Old Style", "Palatino Linotype", Palatino, serif;
+}
+
+details.card > summary::-webkit-details-marker {
+  display: none;
+}
+
+details.card summary::after {
+  content: "Closed";
+  float: right;
+  color: var(--muted);
+  font: 700 12px/1 "Courier New", Courier, monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+details.card[open] summary::after {
+  content: "Open";
+}
+
+details.card[open] > summary {
+  padding-bottom: 16px;
+}
+
+details.card .grid {
+  padding: 0 22px 22px;
+}
+
+details.card .grid .field.wide {
+  grid-column: 1 / -1;
+}
+
 .hero {
   display: grid;
   gap: 24px;

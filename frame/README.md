@@ -67,6 +67,8 @@ Each one enables SPI + I2C, installs the deps and a systemd timer, writes `~/.bi
 
 After install, open the local settings UI at <http://birdpic.local:8080>. It edits `~/.birdframe/config.toml`, lets you switch between 24h and today, framed and fullscreen, and includes the title/alignment controls that feed the frame layout.
 
+Most settings sections start collapsed so the preset buttons stay visible first. The same page also includes a Van Gogh art mode with a small portrait-only set of paintings; when you choose it, the renderer forces fullscreen mode on the frame.
+
 If you pull a new repo version later, re-run `./install.sh` from `frame/` to refresh the services, then revisit the same URL.
 
 The frame window can be either a rolling last-24h view or strict local-today

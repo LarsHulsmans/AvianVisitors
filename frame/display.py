@@ -54,6 +54,8 @@ DEFAULTS = {
     "status_text_today": "TODAY",  # top-right status label when mode is today
     "image": "",            # local PNG written by the shooter
     "image_url": "",        # or a published screenshot URL
+    "content_mode": "birds",  # birds | vangogh
+    "vangogh_painting": "self_portrait_felt_hat",
     "shoot": False,         # or capture inline (needs a browser; the Zero 2 W handles it)
     "shoot_title": None, "shoot_subtitle": None,
     "shoot_subtitle_24h": None,    # optional mode override for large headline text
@@ -121,6 +123,15 @@ def _active_layout_mode(cfg):
     return _normalize_layout_mode(cfg.get("_layout_mode", cfg.get("layout_mode", "framed")))
 
 
+def _normalize_content_mode(mode):
+    mode = str(mode or "birds").strip().lower()
+    return "vangogh" if mode == "vangogh" else "birds"
+
+
+def _active_content_mode(cfg):
+    return _normalize_content_mode(cfg.get("_content_mode", cfg.get("content_mode", "birds")))
+
+
 def _hours_since_midnight(now_local=None):
     now_local = now_local or datetime.now()
     midnight = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -181,6 +192,15 @@ def fetch_species(cfg, auth=None):
         return birdweather.species_for_zip(cfg["zip"], country=cfg["bw_country"], days=cfg["bw_days"])
     return fetch_recent(cfg["base_url"], cfg["hours"], cfg["timeout"], auth,
                         window_mode=cfg.get("_window_mode", cfg.get("window_mode", "24h")))
+
+
+def _fetch_vangogh_image(cfg, timeout):
+    from vangogh import painting_by_key
+
+    painting = painting_by_key(cfg.get("vangogh_painting", ""))
+    req = urllib.request.Request(painting["url"], headers={"User-Agent": "AvianVisitors-frame/1.0"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return Image.open(io.BytesIO(r.read(20_000_000))).convert("RGB")
 
 
 # --- image ------------------------------------------------------------------
@@ -342,6 +362,8 @@ def _draw_mat_box(img):
 
 
 def _status_label(cfg):
+    if _active_content_mode(cfg) == "vangogh":
+        return ""
     if cfg.get("species_source") == "birdweather":
         return ""
     mode = _normalize_window_mode(cfg.get("_window_mode", cfg.get("window_mode", "24h")))
@@ -351,6 +373,8 @@ def _status_label(cfg):
 
 
 def _layout_image(cfg, img, species):
+    if _active_content_mode(cfg) == "vangogh":
+        return img
     mode = _active_layout_mode(cfg)
     if mode == "full":
         return img
@@ -436,6 +460,8 @@ def load_state(path):
             "last_refresh": 0,
             "window_mode": None,
             "layout_mode": None,
+            "content_mode": None,
+            "vangogh_painting": None,
             "last_toggle": 0,
             "last_layout_toggle": 0,
         }
@@ -451,6 +477,8 @@ def save_state(path, sig, when, state=None):
         "last_refresh": when,
         "window_mode": state.get("window_mode"),
         "layout_mode": state.get("layout_mode"),
+        "content_mode": state.get("content_mode"),
+        "vangogh_painting": state.get("vangogh_painting"),
         "last_toggle": state.get("last_toggle", 0),
         "last_layout_toggle": state.get("last_layout_toggle", 0),
     }
@@ -500,6 +528,8 @@ def _mode_subtitle(cfg):
 
 # --- run --------------------------------------------------------------------
 def obtain_image(cfg, species=None):
+    if _active_content_mode(cfg) == "vangogh":
+        return _fetch_vangogh_image(cfg, cfg["timeout"])
     if cfg.get("species_source") == "birdweather":
         from shoot import shoot_birdweather
         if species is None:  # gate skipped (--no-signature): fetch the list to render
@@ -553,9 +583,17 @@ def obtain_image(cfg, species=None):
 def run(cfg, preview=None, force=False, use_signature=True, mat_box=False):
     now = time.time()
     state = load_state(cfg["state"])
+    if _active_content_mode(cfg) == "vangogh":
+        cfg["layout_mode"] = "full"
+        cfg["_layout_mode"] = "full"
+        cfg["_content_mode"] = "vangogh"
     if not cfg.get("_layout_mode_from_config") and state.get("layout_mode"):
         cfg["_layout_mode"] = _normalize_layout_mode(state.get("layout_mode"))
+    if not cfg.get("_content_mode_from_config") and state.get("content_mode"):
+        cfg["_content_mode"] = _normalize_content_mode(state.get("content_mode"))
     state["layout_mode"] = _active_layout_mode(cfg)
+    state["content_mode"] = _active_content_mode(cfg)
+    state["vangogh_painting"] = cfg.get("vangogh_painting")
     before_mode = _normalize_window_mode(state.get("window_mode") or cfg.get("window_mode", "24h"))
     cfg["_window_mode"] = _apply_button_toggle(cfg, state)
     cfg.pop("_button_pressed", None)
@@ -569,7 +607,7 @@ def run(cfg, preview=None, force=False, use_signature=True, mat_box=False):
         except Exception as e:
             print(f"signature fetch failed: {e}", file=sys.stderr)  # treat as no change
     heal_due = now - state.get("last_refresh", 0) >= cfg["heal_hours"] * 3600
-    changed = toggled or (not use_signature) or (sig is not None and sig != state.get("signature"))
+    changed = toggled or (_active_content_mode(cfg) == "vangogh" and cfg.get("vangogh_painting") != state.get("vangogh_painting")) or (not use_signature) or (sig is not None and sig != state.get("signature"))
     if not force and not preview:
         if in_quiet_hours(cfg, datetime.now().hour):
             print("quiet hours; skip")
@@ -700,17 +738,24 @@ def watch_button(cfg):
 def load_config(path):
     cfg = dict(DEFAULTS)
     layout_mode_from_config = False
+    content_mode_from_config = False
     if path:
         with open(os.path.expanduser(path), "rb") as f:
             data = tomllib.load(f)
         layout_mode_from_config = "layout_mode" in data
+        content_mode_from_config = "content_mode" in data
         cfg.update(data)
     cfg["window_mode"] = _normalize_window_mode(cfg.get("window_mode", "24h"))
     cfg["layout_mode"] = _normalize_layout_mode(cfg.get("layout_mode", "framed"))
+    cfg["content_mode"] = _normalize_content_mode(cfg.get("content_mode", "birds"))
+    if cfg["content_mode"] == "vangogh":
+        cfg["layout_mode"] = "full"
     # Lock layout mode at process start so button-based window toggles can
     # never drift fullscreen runs back to framed until the service restarts.
     cfg["_layout_mode"] = cfg["layout_mode"]
     cfg["_layout_mode_from_config"] = layout_mode_from_config
+    cfg["_content_mode"] = cfg["content_mode"]
+    cfg["_content_mode_from_config"] = content_mode_from_config
     return cfg
 
 

@@ -45,6 +45,8 @@ MANAGED_KEYS = [
     "status_text_today",
     "image",
     "image_url",
+    "content_mode",
+    "vangogh_painting",
     "shoot",
     "shoot_title",
     "shoot_subtitle",
@@ -84,7 +86,7 @@ MANAGED_KEYS = [
 ]
 
 SECTION_ORDER = [
-    ("Source", ["base_url", "species_source", "zip", "bw_days", "bw_country", "hours", "window_mode", "image", "image_url", "shoot"]),
+    ("Source", ["base_url", "species_source", "zip", "bw_days", "bw_country", "hours", "window_mode", "image", "image_url", "content_mode", "vangogh_painting", "shoot"]),
     ("Mode and buttons", ["layout_mode", "toggle_button", "layout_toggle_button", "status_text_24h", "status_text_today", "quiet_start", "quiet_end", "heal_hours"]),
     ("Title and collage", ["shoot_title", "shoot_subtitle", "shoot_subtitle_24h", "shoot_subtitle_today", "shoot_headline_px", "shoot_eyebrow_px", "shoot_lowercase", "shoot_collage_vh", "shoot_title_gap_px", "shoot_group_y", "shoot_collage_lock_center", "shoot_title_detached", "shoot_title_offset_y_px"]),
     ("Fullscreen tweaks", ["shoot_full_y_shift_px", "shoot_full_collage_vh", "shoot_full_text_y_px", "shoot_pad_top_px", "shoot_pad_side_px", "shoot_pad_bottom_px", "mat"]),
@@ -105,6 +107,8 @@ FIELD_DEFS: dict[str, dict[str, Any]] = {
     "status_text_today": {"label": "Today badge", "kind": "text", "value_width": 12},
     "image": {"label": "Local image path", "kind": "text", "width": "wide"},
     "image_url": {"label": "Image URL", "kind": "text", "width": "wide"},
+    "content_mode": {"label": "Content mode", "kind": "select", "options": [("birds", "Birds"), ("vangogh", "Van Gogh art")], "help": "Van Gogh mode forces fullscreen portrait art instead of birds."},
+    "vangogh_painting": {"label": "Van Gogh painting", "kind": "select", "options": [("self_portrait_felt_hat", "Self-Portrait with Grey Felt Hat"), ("dr_gachet", "Portrait of Dr. Gachet"), ("madame_ginoux", "L'Arlésienne: Madame Ginoux")], "help": "Portrait-only public-domain paintings."},
     "shoot": {"label": "Render on the Pi", "kind": "checkbox"},
     "shoot_title": {"label": "Title", "kind": "text", "width": "wide"},
     "shoot_subtitle": {"label": "Subtitle", "kind": "text", "width": "wide"},
@@ -171,6 +175,8 @@ def _default_config() -> dict[str, Any]:
         "status_text_today": "TODAY",
         "image": "",
         "image_url": "",
+        "content_mode": "birds",
+        "vangogh_painting": "self_portrait_felt_hat",
         "shoot": False,
         "shoot_title": None,
         "shoot_subtitle": None,
@@ -290,6 +296,8 @@ def _parse_form(form: dict[str, list[str]]) -> dict[str, Any]:
             values[key] = key in form
         else:
             values[key] = _coerce_value(key, form.get(key, [""])[0])
+    if values.get("content_mode") == "vangogh":
+        values["layout_mode"] = "full"
     return values
 
 
@@ -374,6 +382,11 @@ def _render_section(title: str, names: Iterable[str], config: dict[str, Any]) ->
     return f'<section class="card"><h2>{html.escape(title)}</h2><div class="grid">{"".join(cards)}</div></section>'
 
 
+def _render_collapsed_section(title: str, names: Iterable[str], config: dict[str, Any]) -> str:
+    cards = [ _render_field(name, config) for name in names if name in FIELD_DEFS ]
+    return f'<details class="card"><summary>{html.escape(title)}</summary><div class="grid">{"".join(cards)}</div></details>'
+
+
 def _render_presets() -> str:
     return """
     <section class="card compact">
@@ -401,7 +414,7 @@ def _config_snapshot(config: dict[str, Any]) -> str:
 def render_page(config: dict[str, Any], message: str = "", error: str = "") -> str:
     sections = [
         _render_presets(),
-        *(_render_section(title, names, config) for title, names in SECTION_ORDER),
+        *(_render_collapsed_section(title, names, config) for title, names in SECTION_ORDER),
     ]
     snapshot = html.escape(_config_snapshot(config))
     status_bits = []
