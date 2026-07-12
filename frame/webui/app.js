@@ -19,13 +19,44 @@ function setValue(name, value) {
   field.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
+function updateModeSections() {
+  const modeField = document.querySelector('[name="content_mode"]');
+  const mode = modeField ? modeField.value : 'birds';
+  const paintingsMode = mode === 'paintings' || mode === 'vangogh';
+  document.querySelectorAll('.paintings-only').forEach((el) => {
+    el.style.display = paintingsMode ? '' : 'none';
+  });
+  document.querySelectorAll('.birds-only').forEach((el) => {
+    el.style.display = paintingsMode ? 'none' : '';
+  });
+}
+
+function updatePaintingSelection() {
+  document.querySelectorAll('.painting-card').forEach((card) => {
+    const input = card.querySelector('input[type="radio"]');
+    if (!input) return;
+    card.classList.toggle('selected', input.checked);
+  });
+}
+
 document.addEventListener('input', updateRangeOutputs);
 document.addEventListener('change', updateRangeOutputs);
 document.addEventListener('DOMContentLoaded', () => {
   updateRangeOutputs();
+  updateModeSections();
+  updatePaintingSelection();
 
   document.querySelectorAll('details.card').forEach((details) => {
     details.open = false;
+  });
+
+  const modeField = document.querySelector('[name="content_mode"]');
+  if (modeField) {
+    modeField.addEventListener('change', updateModeSections);
+  }
+
+  document.querySelectorAll('.painting-card input[type="radio"]').forEach((input) => {
+    input.addEventListener('change', updatePaintingSelection);
   });
 
   document.querySelectorAll('[data-preset]').forEach((button) => {
@@ -33,21 +64,27 @@ document.addEventListener('DOMContentLoaded', () => {
       const preset = button.dataset.preset;
       if (preset === 'today-full') {
         setValue('window_mode', 'today');
+        setValue('content_mode', 'birds');
         setValue('layout_mode', 'full');
       } else if (preset === 'today-framed') {
         setValue('window_mode', 'today');
+        setValue('content_mode', 'birds');
         setValue('layout_mode', 'framed');
       } else if (preset === '24h-full') {
         setValue('window_mode', '24h');
+        setValue('content_mode', 'birds');
         setValue('layout_mode', 'full');
       } else if (preset === '24h-framed') {
         setValue('window_mode', '24h');
+        setValue('content_mode', 'birds');
         setValue('layout_mode', 'framed');
-      } else if (preset === 'vangogh-full') {
-        setValue('content_mode', 'vangogh');
+      } else if (preset === 'paintings-full') {
+        setValue('content_mode', 'paintings');
         setValue('layout_mode', 'full');
         setValue('vangogh_painting', 'self_portrait_felt_hat');
       }
+      updateModeSections();
+      updatePaintingSelection();
       window.scrollTo({ top: 0, behavior: 'smooth' });
     });
   });

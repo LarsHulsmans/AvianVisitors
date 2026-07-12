@@ -194,8 +194,8 @@ Installed. The frame mirrors birdnet.local on your network and refreshes every
 shows a plain title card. If the panel hangs upside down, set rotate = 270 in
 ~/.birdframe/config.toml.
 
-Open the local settings UI at http://birdpic.local:8080 to change 24h/today,
-fullscreen/framed, title placement, and the other frame controls.
+Open the local settings UI at http://birdpic.local:8080 for the simple editor,
+or http://birdpic.local:8080/advanced for all controls.
 
 The settings page also includes a Van Gogh art mode with a few portrait-only
 paintings. That mode forces fullscreen on the panel.
@@ -208,8 +208,8 @@ Installed. The frame fetches its image from
   $IMAGE_URL
 and refreshes every 15 min, only when the birds change.
 
-Open the local settings UI at http://birdpic.local:8080 to change the frame
-settings after install.
+Open the local settings UI at http://birdpic.local:8080 for the simple editor,
+or http://birdpic.local:8080/advanced for all controls.
 DONE
     ;;
   birdweather)
@@ -218,8 +218,8 @@ DONE
 Installed in BirdWeather mode for ZIP $ZIP. The frame renders the top birds near
 you on the Pi and refreshes every 15 min, only when the local top birds change.
 
-Open the local settings UI at http://birdpic.local:8080 to change 24h/today,
-fullscreen/framed, and the title/alignment controls after install.
+Open the local settings UI at http://birdpic.local:8080 for the simple editor,
+or http://birdpic.local:8080/advanced for all controls.
 
 The same settings page includes a Van Gogh art mode with portrait paintings
 that render fullscreen only.

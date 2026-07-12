@@ -275,6 +275,52 @@ output {
   gap: 12px;
 }
 
+.upload-form {
+  display: grid;
+  gap: 12px;
+}
+
+.painting-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px;
+  margin: 12px 0 18px;
+}
+
+.painting-card {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid rgba(45, 41, 36, 0.14);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.78);
+  cursor: pointer;
+}
+
+.painting-card input[type="radio"] {
+  accent-color: var(--accent);
+}
+
+.painting-card img {
+  width: 100%;
+  height: 220px;
+  object-fit: cover;
+  border-radius: 12px;
+  border: 1px solid rgba(45, 41, 36, 0.14);
+}
+
+.painting-card span {
+  font: 700 0.82rem/1.2 "Courier New", Courier, monospace;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.painting-card.selected {
+  border-color: rgba(47, 111, 92, 0.8);
+  box-shadow: 0 0 0 3px rgba(47, 111, 92, 0.16);
+}
+
 button,
 .link-button {
   border: 1px solid rgba(45, 41, 36, 0.14);

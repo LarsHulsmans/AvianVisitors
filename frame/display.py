@@ -24,6 +24,7 @@ import sys
 import time
 import urllib.request
 from datetime import datetime
+from pathlib import Path
 from urllib.parse import urlencode
 
 from PIL import Image, ImageChops, ImageDraw, ImageFont
@@ -54,8 +55,9 @@ DEFAULTS = {
     "status_text_today": "TODAY",  # top-right status label when mode is today
     "image": "",            # local PNG written by the shooter
     "image_url": "",        # or a published screenshot URL
-    "content_mode": "birds",  # birds | vangogh
+    "content_mode": "birds",  # birds | paintings
     "vangogh_painting": "self_portrait_felt_hat",
+    "painting_scale": 1.0,
     "shoot": False,         # or capture inline (needs a browser; the Zero 2 W handles it)
     "shoot_title": None, "shoot_subtitle": None,
     "shoot_subtitle_24h": None,    # optional mode override for large headline text
@@ -125,7 +127,17 @@ def _active_layout_mode(cfg):
 
 def _normalize_content_mode(mode):
     mode = str(mode or "birds").strip().lower()
-    return "vangogh" if mode == "vangogh" else "birds"
+    if mode in {"vangogh", "paintings"}:
+        return "paintings"
+    return "birds"
+
+
+def _normalize_painting_scale(scale):
+    try:
+        value = float(scale)
+    except Exception:  # noqa: BLE001
+        return 1.0
+    return max(0.6, min(2.2, value))
 
 
 def _active_content_mode(cfg):
@@ -197,14 +209,43 @@ def fetch_species(cfg, auth=None):
 def _fetch_vangogh_image(cfg, timeout):
     from vangogh import PAINTINGS, painting_by_key
 
-    requested = painting_by_key(cfg.get("vangogh_painting", ""))
+    def _paintings_dir() -> Path:
+        return Path(os.path.expanduser(cfg.get("cache", "~/.birdframe"))) / "paintings"
+
+    def _fit_painting(img):
+        img = img.convert("RGB")
+        scale = _normalize_painting_scale(cfg.get("painting_scale", 1.0))
+        cover = max(PANEL_W / img.width, PANEL_H / img.height)
+        factor = cover * scale
+        nw = max(1, round(img.width * factor))
+        nh = max(1, round(img.height * factor))
+        resized = img.resize((nw, nh), Image.LANCZOS)
+        canvas = Image.new("RGB", (PANEL_W, PANEL_H), (244, 239, 231))
+        ox = (nw - PANEL_W) // 2
+        oy = (nh - PANEL_H) // 2
+        if nw >= PANEL_W and nh >= PANEL_H:
+            return resized.crop((ox, oy, ox + PANEL_W, oy + PANEL_H))
+        canvas.paste(resized, ((PANEL_W - nw) // 2, (PANEL_H - nh) // 2))
+        return canvas
+
+    requested_key = str(cfg.get("vangogh_painting", "") or "").strip()
+    if requested_key.startswith("local:"):
+        local_name = os.path.basename(requested_key.split(":", 1)[1])
+        local_path = _paintings_dir() / local_name
+        if local_path.exists() and local_path.is_file():
+            try:
+                return _fit_painting(Image.open(local_path))
+            except Exception:
+                pass
+
+    requested = painting_by_key(requested_key)
     titles = [requested] + [painting for painting in PAINTINGS if painting["key"] != requested["key"]]
     last_error = None
     for painting in titles:
         try:
             req = urllib.request.Request(painting["url"], headers={"User-Agent": "AvianVisitors-frame/1.0"})
             with urllib.request.urlopen(req, timeout=timeout) as r:
-                return Image.open(io.BytesIO(r.read(20_000_000))).convert("RGB")
+                return _fit_painting(Image.open(io.BytesIO(r.read(20_000_000))))
         except Exception as exc:  # noqa: BLE001
             last_error = exc
     img = Image.new("RGB", (PANEL_W, PANEL_H), (244, 239, 231))
@@ -375,7 +416,7 @@ def _draw_mat_box(img):
 
 
 def _status_label(cfg):
-    if _active_content_mode(cfg) == "vangogh":
+    if _active_content_mode(cfg) == "paintings":
         return ""
     if cfg.get("species_source") == "birdweather":
         return ""
@@ -386,7 +427,7 @@ def _status_label(cfg):
 
 
 def _layout_image(cfg, img, species):
-    if _active_content_mode(cfg) == "vangogh":
+    if _active_content_mode(cfg) == "paintings":
         return img
     mode = _active_layout_mode(cfg)
     if mode == "full":
@@ -541,7 +582,7 @@ def _mode_subtitle(cfg):
 
 # --- run --------------------------------------------------------------------
 def obtain_image(cfg, species=None):
-    if _active_content_mode(cfg) == "vangogh":
+    if _active_content_mode(cfg) == "paintings":
         return _fetch_vangogh_image(cfg, cfg["timeout"])
     if cfg.get("species_source") == "birdweather":
         from shoot import shoot_birdweather
@@ -596,10 +637,10 @@ def obtain_image(cfg, species=None):
 def run(cfg, preview=None, force=False, use_signature=True, mat_box=False):
     now = time.time()
     state = load_state(cfg["state"])
-    if _active_content_mode(cfg) == "vangogh":
+    if _active_content_mode(cfg) == "paintings":
         cfg["layout_mode"] = "full"
         cfg["_layout_mode"] = "full"
-        cfg["_content_mode"] = "vangogh"
+        cfg["_content_mode"] = "paintings"
     if not cfg.get("_layout_mode_from_config") and state.get("layout_mode"):
         cfg["_layout_mode"] = _normalize_layout_mode(state.get("layout_mode"))
     if not cfg.get("_content_mode_from_config") and state.get("content_mode"):
@@ -620,7 +661,7 @@ def run(cfg, preview=None, force=False, use_signature=True, mat_box=False):
         except Exception as e:
             print(f"signature fetch failed: {e}", file=sys.stderr)  # treat as no change
     heal_due = now - state.get("last_refresh", 0) >= cfg["heal_hours"] * 3600
-    changed = toggled or (_active_content_mode(cfg) == "vangogh" and cfg.get("vangogh_painting") != state.get("vangogh_painting")) or (not use_signature) or (sig is not None and sig != state.get("signature"))
+    changed = toggled or (_active_content_mode(cfg) == "paintings" and cfg.get("vangogh_painting") != state.get("vangogh_painting")) or (not use_signature) or (sig is not None and sig != state.get("signature"))
     if not force and not preview:
         if in_quiet_hours(cfg, datetime.now().hour):
             print("quiet hours; skip")
@@ -761,7 +802,8 @@ def load_config(path):
     cfg["window_mode"] = _normalize_window_mode(cfg.get("window_mode", "24h"))
     cfg["layout_mode"] = _normalize_layout_mode(cfg.get("layout_mode", "framed"))
     cfg["content_mode"] = _normalize_content_mode(cfg.get("content_mode", "birds"))
-    if cfg["content_mode"] == "vangogh":
+    cfg["painting_scale"] = _normalize_painting_scale(cfg.get("painting_scale", 1.0))
+    if cfg["content_mode"] == "paintings":
         cfg["layout_mode"] = "full"
     # Lock layout mode at process start so button-based window toggles can
     # never drift fullscreen runs back to framed until the service restarts.

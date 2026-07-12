@@ -13,12 +13,12 @@ import os
 import re
 import subprocess
 import sys
+from pathlib import Path
 from dataclasses import dataclass
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from pathlib import Path
 from typing import Any, Iterable
-from urllib.parse import parse_qs, quote_plus, urlparse
+from urllib.parse import parse_qs, quote, quote_plus, unquote, urlparse
 
 try:
     import tomllib
@@ -30,6 +30,7 @@ FRAME_DIR = Path(__file__).resolve().parent
 DEFAULT_CONFIG_PATH = Path.home() / ".birdframe" / "config.toml"
 DEFAULT_HOST = "0.0.0.0"
 DEFAULT_PORT = 8080
+ALLOWED_UPLOAD_EXTS = {".png", ".jpg", ".jpeg", ".webp"}
 
 MANAGED_KEYS = [
     "base_url",
@@ -47,6 +48,7 @@ MANAGED_KEYS = [
     "image_url",
     "content_mode",
     "vangogh_painting",
+    "painting_scale",
     "shoot",
     "shoot_title",
     "shoot_subtitle",
@@ -86,7 +88,7 @@ MANAGED_KEYS = [
 ]
 
 SECTION_ORDER = [
-    ("Source", ["base_url", "species_source", "zip", "bw_days", "bw_country", "hours", "window_mode", "image", "image_url", "content_mode", "vangogh_painting", "shoot"]),
+    ("Source", ["base_url", "species_source", "zip", "bw_days", "bw_country", "hours", "window_mode", "image", "image_url", "content_mode", "vangogh_painting", "painting_scale", "shoot"]),
     ("Mode and buttons", ["layout_mode", "toggle_button", "layout_toggle_button", "status_text_24h", "status_text_today", "quiet_start", "quiet_end", "heal_hours"]),
     ("Title and collage", ["shoot_title", "shoot_subtitle", "shoot_subtitle_24h", "shoot_subtitle_today", "shoot_headline_px", "shoot_eyebrow_px", "shoot_lowercase", "shoot_collage_vh", "shoot_title_gap_px", "shoot_group_y", "shoot_collage_lock_center", "shoot_title_detached", "shoot_title_offset_y_px"]),
     ("Fullscreen tweaks", ["shoot_full_y_shift_px", "shoot_full_collage_vh", "shoot_full_text_y_px", "shoot_pad_top_px", "shoot_pad_side_px", "shoot_pad_bottom_px", "mat"]),
@@ -107,8 +109,9 @@ FIELD_DEFS: dict[str, dict[str, Any]] = {
     "status_text_today": {"label": "Today badge", "kind": "text", "value_width": 12},
     "image": {"label": "Local image path", "kind": "text", "width": "wide"},
     "image_url": {"label": "Image URL", "kind": "text", "width": "wide"},
-    "content_mode": {"label": "Content mode", "kind": "select", "options": [("birds", "Birds"), ("vangogh", "Van Gogh art")], "help": "Van Gogh mode forces fullscreen portrait art instead of birds."},
-    "vangogh_painting": {"label": "Van Gogh painting", "kind": "select", "options": [("self_portrait_felt_hat", "Self-Portrait with Grey Felt Hat"), ("dr_gachet", "Portrait of Dr. Gachet"), ("madame_ginoux", "L'Arlésienne: Madame Ginoux")], "help": "Portrait-only public-domain paintings."},
+    "content_mode": {"label": "Display content", "kind": "select", "options": [("birds", "Birds"), ("paintings", "Paintings")], "help": "Use paintings mode to show local artwork instead of birds."},
+    "vangogh_painting": {"label": "Selected painting", "kind": "text", "width": "wide", "help": "Updated by the painting gallery."},
+    "painting_scale": {"label": "Painting zoom", "kind": "range", "min": 0.6, "max": 2.2, "step": 0.05, "help": "1.0 fills the frame naturally. Higher values zoom in."},
     "shoot": {"label": "Render on the Pi", "kind": "checkbox"},
     "shoot_title": {"label": "Title", "kind": "text", "width": "wide"},
     "shoot_subtitle": {"label": "Subtitle", "kind": "text", "width": "wide"},
@@ -157,6 +160,12 @@ def load_config(path: Path) -> dict[str, Any]:
     if path.exists():
         with path.open("rb") as f:
             cfg.update(tomllib.load(f))
+    mode = str(cfg.get("content_mode", "birds") or "birds").strip().lower()
+    cfg["content_mode"] = "paintings" if mode in {"paintings", "vangogh"} else "birds"
+    try:
+        cfg["painting_scale"] = max(0.6, min(2.2, float(cfg.get("painting_scale", 1.0))))
+    except Exception:  # noqa: BLE001
+        cfg["painting_scale"] = 1.0
     return cfg
 
 
@@ -177,6 +186,7 @@ def _default_config() -> dict[str, Any]:
         "image_url": "",
         "content_mode": "birds",
         "vangogh_painting": "self_portrait_felt_hat",
+        "painting_scale": 1.0,
         "shoot": False,
         "shoot_title": None,
         "shoot_subtitle": None,
@@ -296,9 +306,62 @@ def _parse_form(form: dict[str, list[str]]) -> dict[str, Any]:
             values[key] = key in form
         else:
             values[key] = _coerce_value(key, form.get(key, [""])[0])
-    if values.get("content_mode") == "vangogh":
+    if values.get("content_mode") == "paintings":
         values["layout_mode"] = "full"
     return values
+
+
+def _parse_basic_form(form: dict[str, list[str]], config: dict[str, Any]) -> dict[str, Any]:
+    out: dict[str, Any] = {}
+    for key in ("window_mode", "layout_mode", "content_mode", "vangogh_painting", "painting_scale"):
+        if key in form:
+            out[key] = _coerce_value(key, form.get(key, [""])[0])
+    mode = str(out.get("content_mode", config.get("content_mode", "birds")) or "birds")
+    if mode == "paintings":
+        out["layout_mode"] = "full"
+    return out
+
+
+def _safe_filename(name: str) -> str:
+    base = os.path.basename(name or "").strip()
+    base = re.sub(r"[^A-Za-z0-9._-]+", "_", base)
+    return base or "painting.png"
+
+
+def _parse_multipart(content_type: str, body: bytes) -> tuple[dict[str, list[str]], dict[str, tuple[str, bytes]]]:
+    boundary_match = re.search(r"boundary=(?P<b>[^;]+)", content_type)
+    if not boundary_match:
+        raise ValueError("Missing multipart boundary")
+    boundary = boundary_match.group("b").strip().strip('"').encode("utf-8")
+    form: dict[str, list[str]] = {}
+    files: dict[str, tuple[str, bytes]] = {}
+    marker = b"--" + boundary
+    for chunk in body.split(marker):
+        chunk = chunk.strip()
+        if not chunk or chunk == b"--":
+            continue
+        if chunk.startswith(b"\r\n"):
+            chunk = chunk[2:]
+        header_blob, sep, payload = chunk.partition(b"\r\n\r\n")
+        if not sep:
+            continue
+        headers: dict[str, str] = {}
+        for raw in header_blob.decode("utf-8", errors="ignore").split("\r\n"):
+            if ":" in raw:
+                k, v = raw.split(":", 1)
+                headers[k.lower().strip()] = v.strip()
+        disposition = headers.get("content-disposition", "")
+        name_match = re.search(r'name="([^"]+)"', disposition)
+        if not name_match:
+            continue
+        name = name_match.group(1)
+        filename_match = re.search(r'filename="([^"]*)"', disposition)
+        content = payload.rstrip(b"\r\n")
+        if filename_match and filename_match.group(1):
+            files[name] = (filename_match.group(1), content)
+        else:
+            form.setdefault(name, []).append(content.decode("utf-8", errors="ignore"))
+    return form, files
 
 
 def _refresh_now(config_path: Path) -> None:
@@ -396,11 +459,28 @@ def _render_presets() -> str:
         <button type="button" data-preset="today-framed">Today + framed</button>
         <button type="button" data-preset="24h-full">24h + fullscreen</button>
         <button type="button" data-preset="24h-framed">24h + framed</button>
-                <button type="button" data-preset="vangogh-full">Van Gogh fullscreen</button>
+                <button type="button" data-preset="paintings-full">Paintings</button>
       </div>
-            <p class="hint">Use the buttons above for the common modes, including the art mode that forces fullscreen.</p>
+            <p class="hint">Use presets to quickly set the simple editor controls.</p>
     </section>
     """
+
+
+def _render_painting_gallery(paintings: list[dict[str, str]], selected: str) -> str:
+    cards: list[str] = []
+    for painting in paintings:
+        key = painting["key"]
+        checked = " checked" if key == selected else ""
+        title = html.escape(painting["title"])
+        src = html.escape(painting["preview"])
+        cards.append(
+            f'<label class="painting-card">'
+            f'<input type="radio" name="vangogh_painting" value="{html.escape(key)}"{checked}>'
+            f'<img src="{src}" alt="{title}">'
+            f'<span>{title}</span>'
+            f'</label>'
+        )
+    return f'<div class="painting-grid">{"".join(cards)}</div>'
 
 
 def _config_snapshot(config: dict[str, Any]) -> str:
@@ -420,7 +500,95 @@ def _asset_version(path: Path) -> str:
         return "0"
 
 
-def render_page(config: dict[str, Any], message: str = "", error: str = "") -> str:
+def _render_alert(message: str, error: str) -> str:
+        if error:
+                return f'<div class="alert error">{html.escape(error)}</div>'
+        if message:
+                return f'<div class="alert success">{html.escape(message)}</div>'
+        return ""
+
+
+def _render_header(config: dict[str, Any], subtitle: str, nav_link: str, nav_label: str) -> str:
+        status_bits = []
+        status_bits.append(f'<span class="status-chip">{html.escape(str(config.get("window_mode", "24h")))} window</span>')
+        status_bits.append(f'<span class="status-chip">{html.escape(str(config.get("layout_mode", "framed")))} layout</span>')
+        status_bits.append(f'<span class="status-chip">{html.escape(str(config.get("content_mode", "birds")))} content</span>')
+        return (
+                '<header class="hero card">'
+                '<div>'
+                '<p class="eyebrow">AvianVisitors</p>'
+                '<h1>Frame settings</h1>'
+                f'<p class="lede">{html.escape(subtitle)}</p>'
+                f'<p class="small"><a class="link-button" href="{nav_link}">{html.escape(nav_label)}</a></p>'
+                '</div>'
+                '<div class="hero-meta">'
+                f'<div class="status-row">{"".join(status_bits)}</div>'
+                '<p class="small">Saved to <code>~/.birdframe/config.toml</code>.</p>'
+                '</div>'
+                '</header>'
+        )
+
+
+def render_basic_page(config: dict[str, Any], paintings: list[dict[str, str]], message: str = "", error: str = "") -> str:
+        css_version = _asset_version(FRAME_DIR / "webui" / "style.css")
+        js_version = _asset_version(FRAME_DIR / "webui" / "app.js")
+        selected = str(config.get("vangogh_painting", "self_portrait_felt_hat"))
+        gallery = _render_painting_gallery(paintings, selected)
+        content_mode = _field_value(config, "content_mode")
+        window_mode = _field_value(config, "window_mode")
+        layout_mode = _field_value(config, "layout_mode")
+        scale_field = _render_field("painting_scale", config)
+        return f"""<!doctype html>
+<html lang=\"en\">
+<head>
+    <meta charset=\"utf-8\">
+    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">
+    <title>AvianVisitors Frame Settings</title>
+    <link rel=\"stylesheet\" href=\"/static/style.css?v={css_version}\">
+    <script defer src=\"/static/app.js?v={js_version}\"></script>
+</head>
+<body>
+    <div class=\"shell\">
+        {_render_header(config, "Simple editor: choose today/24h, layout, and paintings.", "/advanced", "Open advanced editor")}
+        {_render_alert(message, error)}
+        <form method=\"post\" action=\"/save-basic\" class=\"panel-form\" id=\"basic-form\">
+            {_render_presets()}
+            <section class=\"card compact\">
+                <h2>Quick options</h2>
+                <div class=\"grid\">
+                    <div class=\"field\"><label>Frame window</label><select name=\"window_mode\"><option value=\"24h\"{" selected" if str(window_mode)=="24h" else ""}>24 hours</option><option value=\"today\"{" selected" if str(window_mode)=="today" else ""}>Today</option></select></div>
+                    <div class=\"field birds-only\"><label>Layout mode</label><select name=\"layout_mode\"><option value=\"framed\"{" selected" if str(layout_mode)=="framed" else ""}>Framed</option><option value=\"full\"{" selected" if str(layout_mode)=="full" else ""}>Fullscreen</option></select></div>
+                    <div class=\"field\"><label>Display content</label><select name=\"content_mode\"><option value=\"birds\"{" selected" if str(content_mode)=="birds" else ""}>Birds</option><option value=\"paintings\"{" selected" if str(content_mode)=="paintings" else ""}>Paintings</option></select></div>
+                </div>
+            </section>
+            <section class=\"card compact paintings-only\">
+                <h2>Paintings</h2>
+                <p class=\"hint\">Pick a saved painting visually and adjust zoom.</p>
+                {gallery}
+                <div class=\"grid\">{scale_field}</div>
+            </section>
+            <section class=\"card compact paintings-only\">
+                <h2>Upload paintings</h2>
+                <p class=\"hint\">Upload JPG, PNG, or WEBP files. They are stored on the Pi in ~/.birdframe/paintings.</p>
+                <p class=\"hint\">Use the upload form below, then return here and select it.</p>
+            </section>
+            <div class=\"actions card compact\">
+                <button class=\"primary\" type=\"submit\" name=\"action\" value=\"save_refresh\">Save and refresh now</button>
+                <button type=\"submit\" name=\"action\" value=\"save\">Save only</button>
+            </div>
+        </form>
+        <form method=\"post\" action=\"/upload-painting\" enctype=\"multipart/form-data\" class=\"card compact upload-form paintings-only\">
+            <h2>Upload paintings</h2>
+            <input type=\"file\" name=\"painting_file\" accept=\"image/png,image/jpeg,image/webp\" required>
+            <button type=\"submit\">Upload painting</button>
+        </form>
+    </div>
+</body>
+</html>
+"""
+
+
+def render_advanced_page(config: dict[str, Any], message: str = "", error: str = "") -> str:
     sections = [
         _render_presets(),
         *(_render_collapsed_section(title, names, config) for title, names in SECTION_ORDER),
@@ -428,15 +596,7 @@ def render_page(config: dict[str, Any], message: str = "", error: str = "") -> s
     snapshot = html.escape(_config_snapshot(config))
     css_version = _asset_version(FRAME_DIR / "webui" / "style.css")
     js_version = _asset_version(FRAME_DIR / "webui" / "app.js")
-    status_bits = []
-    status_bits.append(f'<span class="status-chip">{html.escape(str(config.get("window_mode", "24h")))} window</span>')
-    status_bits.append(f'<span class="status-chip">{html.escape(str(config.get("layout_mode", "framed")))} layout</span>')
-    if error:
-        alert = f'<div class="alert error">{html.escape(error)}</div>'
-    elif message:
-        alert = f'<div class="alert success">{html.escape(message)}</div>'
-    else:
-        alert = ""
+    alert = _render_alert(message, error)
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -448,17 +608,7 @@ def render_page(config: dict[str, Any], message: str = "", error: str = "") -> s
 </head>
 <body>
   <div class="shell">
-    <header class="hero card">
-      <div>
-        <p class="eyebrow">AvianVisitors</p>
-        <h1>Frame settings</h1>
-        <p class="lede">Adjust the frame's 24h/today window, fullscreen layout, title placement, and display tuning from the browser.</p>
-      </div>
-      <div class="hero-meta">
-        <div class="status-row">{"".join(status_bits)}</div>
-        <p class="small">Saved to <code>~/.birdframe/config.toml</code>.</p>
-      </div>
-    </header>
+    {_render_header(config, "Advanced editor: all frame controls.", "/", "Back to simple editor")}
     {alert}
     <form method="post" action="/save" class="panel-form">
       {"".join(sections)}
@@ -491,6 +641,24 @@ class SettingsHandler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:  # noqa: N802
         parsed = urlparse(self.path)
+        if parsed.path in {"/", "/index.html"}:
+            config = self.app.current_config()
+            message = parse_qs(parsed.query).get("message", [""])[0]
+            error = parse_qs(parsed.query).get("error", [""])[0]
+            body = render_basic_page(config, self.app.list_paintings(), message=message, error=error).encode("utf-8")
+            self._send_html(body)
+            return
+        if parsed.path == "/advanced":
+            config = self.app.current_config()
+            message = parse_qs(parsed.query).get("message", [""])[0]
+            error = parse_qs(parsed.query).get("error", [""])[0]
+            body = render_advanced_page(config, message=message, error=error).encode("utf-8")
+            self._send_html(body)
+            return
+        if parsed.path.startswith("/uploads/"):
+            name = unquote(parsed.path.split("/uploads/", 1)[1])
+            self._send_upload(name)
+            return
         if parsed.path == "/static/style.css":
             self._send_static(self.app.css_path, "text/css; charset=utf-8")
             return
@@ -500,31 +668,43 @@ class SettingsHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/config":
             self._send_json(self.app.current_config())
             return
-        if parsed.path != "/":
-            self.send_error(HTTPStatus.NOT_FOUND)
-            return
-        config = self.app.current_config()
-        message = parse_qs(parsed.query).get("message", [""])[0]
-        error = parse_qs(parsed.query).get("error", [""])[0]
-        body = render_page(config, message=message, error=error).encode("utf-8")
-        self._send_html(body)
+        self.send_error(HTTPStatus.NOT_FOUND)
 
     def do_POST(self) -> None:  # noqa: N802
-        if self.path != "/save":
-            self.send_error(HTTPStatus.NOT_FOUND)
+        if self.path in {"/save", "/save-basic"}:
+            length = int(self.headers.get("Content-Length", "0"))
+            payload = self.rfile.read(length).decode("utf-8")
+            form = parse_qs(payload, keep_blank_values=True)
+            action = form.get("action", ["save"])[0]
+            target = "/advanced" if self.path == "/save" else "/"
+            try:
+                if self.path == "/save":
+                    self.app.save_from_form(form)
+                else:
+                    self.app.save_basic_from_form(form)
+                if action == "save_refresh":
+                    self.app.trigger_refresh()
+            except Exception as exc:  # noqa: BLE001
+                self._redirect(target + "?error=" + quote_plus(str(exc)), code=HTTPStatus.SEE_OTHER)
+                return
+            self._redirect(target + "?message=" + quote_plus("Saved settings"), code=HTTPStatus.SEE_OTHER)
             return
-        length = int(self.headers.get("Content-Length", "0"))
-        payload = self.rfile.read(length).decode("utf-8")
-        form = parse_qs(payload, keep_blank_values=True)
-        action = form.get("action", ["save"])[0]
-        try:
-            self.app.save_from_form(form)
-            if action == "save_refresh":
-                self.app.trigger_refresh()
-        except Exception as exc:  # noqa: BLE001
-            self._redirect("/?error=" + quote_plus(str(exc)), code=HTTPStatus.SEE_OTHER)
+        if self.path == "/upload-painting":
+            length = int(self.headers.get("Content-Length", "0"))
+            payload = self.rfile.read(length)
+            ctype = self.headers.get("Content-Type", "")
+            try:
+                _, files = _parse_multipart(ctype, payload)
+                if "painting_file" not in files:
+                    raise ValueError("No file uploaded")
+                filename, content = files["painting_file"]
+                self.app.save_uploaded_painting(filename, content)
+            except Exception as exc:  # noqa: BLE001
+                self._redirect("/?error=" + quote_plus(str(exc)), code=HTTPStatus.SEE_OTHER)
+                return
+            self._redirect("/?message=" + quote_plus("Uploaded painting"), code=HTTPStatus.SEE_OTHER)
             return
-        self._redirect("/?message=" + quote_plus("Saved settings"), code=HTTPStatus.SEE_OTHER)
+        self.send_error(HTTPStatus.NOT_FOUND)
 
     def _send_html(self, body: bytes) -> None:
         self.send_response(HTTPStatus.OK)
@@ -545,9 +725,24 @@ class SettingsHandler(BaseHTTPRequestHandler):
         body = path.read_bytes()
         self.send_response(HTTPStatus.OK)
         self.send_header("Content-Type", content_type)
+        self.send_header("Cache-Control", "no-store")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+
+    def _send_upload(self, name: str) -> None:
+        path = self.app.paintings_dir() / _safe_filename(name)
+        if not path.exists() or not path.is_file():
+            self.send_error(HTTPStatus.NOT_FOUND)
+            return
+        ext = path.suffix.lower()
+        ctype = {
+            ".png": "image/png",
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".webp": "image/webp",
+        }.get(ext, "application/octet-stream")
+        self._send_static(path, ctype)
 
     def _redirect(self, location: str, code: HTTPStatus = HTTPStatus.SEE_OTHER) -> None:
         self.send_response(code)
@@ -570,6 +765,57 @@ class SettingsApp:
 
     def current_config(self) -> dict[str, Any]:
         return load_config(self.config_path)
+
+    def paintings_dir(self) -> Path:
+        return self.config_path.parent / "paintings"
+
+    def list_paintings(self) -> list[dict[str, str]]:
+        from vangogh import PAINTINGS
+
+        items = [{
+            "key": p["key"],
+            "title": f"{p['title']} ({p['year']})",
+            "preview": p["url"],
+        } for p in PAINTINGS]
+        pdir = self.paintings_dir()
+        if pdir.exists():
+            for path in sorted(pdir.iterdir()):
+                if not path.is_file() or path.suffix.lower() not in ALLOWED_UPLOAD_EXTS:
+                    continue
+                items.append({
+                    "key": f"local:{path.name}",
+                    "title": path.stem.replace("_", " "),
+                    "preview": f"/uploads/{quote(path.name)}",
+                })
+        return items
+
+    def save_uploaded_painting(self, filename: str, content: bytes) -> None:
+        safe = _safe_filename(filename)
+        ext = Path(safe).suffix.lower()
+        if ext not in ALLOWED_UPLOAD_EXTS:
+            raise ValueError("Use PNG, JPG, JPEG, or WEBP files")
+        if not content:
+            raise ValueError("Uploaded file is empty")
+        pdir = self.paintings_dir()
+        pdir.mkdir(parents=True, exist_ok=True)
+        stem = Path(safe).stem
+        candidate = pdir / safe
+        idx = 2
+        while candidate.exists():
+            candidate = pdir / f"{stem}-{idx}{ext}"
+            idx += 1
+        candidate.write_bytes(content)
+
+    def save_basic_from_form(self, form: dict[str, list[str]]) -> None:
+        current = self.current_config()
+        original_text = self.config_path.read_text() if self.config_path.exists() else ""
+        updates = _parse_basic_form(form, current)
+        current.update(updates)
+        rendered = render_config_text(original_text, current)
+        self.config_path.parent.mkdir(parents=True, exist_ok=True)
+        self.config_path.write_text(rendered)
+        with self.config_path.open("rb") as f:
+            tomllib.load(f)
 
     def save_from_form(self, form: dict[str, list[str]]) -> None:
         current = self.current_config()
