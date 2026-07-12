@@ -170,6 +170,8 @@ sed "s|/home/monalisa/AvianVisitors/frame|$FRAME|g; s|/home/monalisa|$HOME|g; s|
   systemd/birdframe.service | sudo tee /etc/systemd/system/birdframe.service >/dev/null
 sed "s|/home/monalisa/AvianVisitors/frame|$FRAME|g; s|/home/monalisa|$HOME|g; s|User=monalisa|User=$USER|" \
   systemd/birdframe-buttons.service | sudo tee /etc/systemd/system/birdframe-buttons.service >/dev/null
+sed "s|/home/monalisa/AvianVisitors/frame|$FRAME|g; s|/home/monalisa|$HOME|g; s|User=monalisa|User=$USER|" \
+  systemd/birdframe-web.service | sudo tee /etc/systemd/system/birdframe-web.service >/dev/null
 # BirdWeather's remote-ZIP eBird fallback reads its key from the unit environment.
 if [ "$MODE" = birdweather ] && [ -n "$EBIRD_KEY" ]; then
   echo "Environment=EBIRD_API_KEY=$EBIRD_KEY" | sudo tee -a /etc/systemd/system/birdframe.service >/dev/null
@@ -178,6 +180,7 @@ sudo cp systemd/birdframe.timer /etc/systemd/system/birdframe.timer
 sudo systemctl daemon-reload
 sudo systemctl enable --now birdframe.timer  # --now starts it immediately, not only on the next boot
 sudo systemctl enable --now birdframe-buttons.service
+sudo systemctl enable --now birdframe-web.service
 
 case "$MODE" in
   local)
@@ -187,6 +190,9 @@ Installed. The frame mirrors birdnet.local on your network and refreshes every
 15 min, only when the birds change. Until the mic has heard its first bird it
 shows a plain title card. If the panel hangs upside down, set rotate = 270 in
 ~/.birdframe/config.toml.
+
+Open the local settings UI at http://birdpic.local:8080 to change 24h/today,
+fullscreen/framed, title placement, and the other frame controls.
 DONE
     ;;
   image)
@@ -195,6 +201,9 @@ DONE
 Installed. The frame fetches its image from
   $IMAGE_URL
 and refreshes every 15 min, only when the birds change.
+
+Open the local settings UI at http://birdpic.local:8080 to change the frame
+settings after install.
 DONE
     ;;
   birdweather)
@@ -202,6 +211,9 @@ DONE
 
 Installed in BirdWeather mode for ZIP $ZIP. The frame renders the top birds near
 you on the Pi and refreshes every 15 min, only when the local top birds change.
+
+Open the local settings UI at http://birdpic.local:8080 to change 24h/today,
+fullscreen/framed, and the title/alignment controls after install.
 DONE
     # The bundled illustrations center on the western U.S. If birds near this ZIP
     # aren't in the cloned set the frame quietly skips them, which has tripped

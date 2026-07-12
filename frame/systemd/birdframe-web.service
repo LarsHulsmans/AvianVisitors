@@ -1,0 +1,19 @@
+[Unit]
+Description=AvianVisitors frame settings web UI
+Documentation=https://github.com/Twarner491/AvianVisitors
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+# install.sh rewrites User= and the paths to match your install.
+Type=simple
+User=monalisa
+WorkingDirectory=/home/monalisa/AvianVisitors/frame
+ExecStart=/home/monalisa/AvianVisitors/frame/.venv/bin/python /home/monalisa/AvianVisitors/frame/settings_web.py --config /home/monalisa/.birdframe/config.toml --bind 0.0.0.0 --port 8080
+Environment=PYTHONUNBUFFERED=1
+Nice=10
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

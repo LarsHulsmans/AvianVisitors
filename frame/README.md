@@ -65,6 +65,10 @@ Pick how the frame gets its birds:
 
 Each one enables SPI + I2C, installs the deps and a systemd timer, writes `~/.birdframe/config.toml`, and reboots once to bring SPI up. Full options live in [`config.example.toml`](config.example.toml).
 
+After install, open the local settings UI at <http://birdpic.local:8080>. It edits `~/.birdframe/config.toml`, lets you switch between 24h and today, framed and fullscreen, and includes the title/alignment controls that feed the frame layout.
+
+If you pull a new repo version later, re-run `./install.sh` from `frame/` to refresh the services, then revisit the same URL.
+
 The frame window can be either a rolling last-24h view or strict local-today
 (since 00:00): set `window_mode = "24h"` or `window_mode = "today"` in
 `~/.birdframe/config.toml`. A tiny top-right label on the frame shows `24H` or
