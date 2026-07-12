@@ -462,6 +462,7 @@ def _render_presets() -> str:
     <section class="card compact">
       <h2>Presets</h2>
       <div class="preset-row">
+                <button type="button" data-preset="birds">Birds</button>
         <button type="button" data-preset="today-full">Today + fullscreen</button>
         <button type="button" data-preset="today-framed">Today + framed</button>
         <button type="button" data-preset="24h-full">24h + fullscreen</button>

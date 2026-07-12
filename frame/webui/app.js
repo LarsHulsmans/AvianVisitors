@@ -164,6 +164,11 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('[data-preset]').forEach((button) => {
     button.addEventListener('click', () => {
       const preset = button.dataset.preset;
+      if (preset === 'birds') {
+        setValue('content_mode', 'birds');
+        setValue('layout_mode', 'framed');
+        setValue('painting_cycle', false);
+      } else
       if (preset === 'today-full') {
         setValue('window_mode', 'today');
         setValue('content_mode', 'birds');
