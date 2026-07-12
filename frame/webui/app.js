@@ -164,30 +164,14 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('[data-preset]').forEach((button) => {
     button.addEventListener('click', () => {
       const preset = button.dataset.preset;
-      if (preset === 'birds') {
-        setValue('content_mode', 'birds');
-        setValue('layout_mode', 'framed');
-        setValue('painting_cycle', false);
-      } else
-      if (preset === 'today-full') {
+      if (preset === 'birds-today') {
         setValue('window_mode', 'today');
         setValue('content_mode', 'birds');
-        setValue('layout_mode', 'full');
-      } else if (preset === 'today-framed') {
-        setValue('window_mode', 'today');
-        setValue('content_mode', 'birds');
-        setValue('layout_mode', 'framed');
-      } else if (preset === '24h-full') {
+      } else if (preset === 'birds-24h') {
         setValue('window_mode', '24h');
         setValue('content_mode', 'birds');
-        setValue('layout_mode', 'full');
-      } else if (preset === '24h-framed') {
-        setValue('window_mode', '24h');
-        setValue('content_mode', 'birds');
-        setValue('layout_mode', 'framed');
-      } else if (preset === 'paintings-full') {
+      } else if (preset === 'paintings') {
         setValue('content_mode', 'paintings');
-        setValue('layout_mode', 'full');
         setValue('vangogh_painting', 'self_portrait_felt_hat');
       }
       updateModeSections();

@@ -91,7 +91,7 @@ MANAGED_KEYS = [
 
 SECTION_ORDER = [
     ("Source", ["base_url", "species_source", "zip", "bw_days", "bw_country", "hours", "window_mode", "image", "image_url", "content_mode", "vangogh_painting", "painting_scale", "shoot"]),
-    ("Mode and buttons", ["layout_mode", "toggle_button", "layout_toggle_button", "status_text_24h", "status_text_today", "quiet_start", "quiet_end", "heal_hours"]),
+    ("Mode and buttons", ["toggle_button", "layout_toggle_button", "status_text_24h", "status_text_today", "quiet_start", "quiet_end", "heal_hours"]),
     ("Title and collage", ["shoot_title", "shoot_subtitle", "shoot_subtitle_24h", "shoot_subtitle_today", "shoot_headline_px", "shoot_eyebrow_px", "shoot_lowercase", "shoot_collage_vh", "shoot_title_gap_px", "shoot_group_y", "shoot_collage_lock_center", "shoot_title_detached", "shoot_title_offset_y_px"]),
     ("Fullscreen tweaks", ["shoot_full_y_shift_px", "shoot_full_collage_vh", "shoot_full_text_y_px", "shoot_pad_top_px", "shoot_pad_side_px", "shoot_pad_bottom_px", "mat"]),
     ("Hardware", ["rotate", "saturation", "panel", "timeout", "basic_user", "basic_pass", "state", "cache"]),
@@ -181,7 +181,7 @@ def _default_config() -> dict[str, Any]:
         "bw_days": 7,
         "bw_country": "us",
         "hours": 24,
-        "window_mode": "24h",
+        "window_mode": "today",
         "toggle_button": "a",
         "layout_toggle_button": "b",
         "status_text_24h": "24H",
@@ -216,7 +216,7 @@ def _default_config() -> dict[str, Any]:
         "shoot_pad_top_px": None,
         "shoot_pad_side_px": None,
         "shoot_pad_bottom_px": None,
-        "layout_mode": "framed",
+        "layout_mode": "full",
         "mat": 0.0,
         "rotate": 90,
         "saturation": 0.6,
@@ -315,20 +315,17 @@ def _parse_form(form: dict[str, list[str]]) -> dict[str, Any]:
             values[key] = key in form
         else:
             values[key] = _coerce_value(key, form.get(key, [""])[0])
-    if values.get("content_mode") == "paintings":
-        values["layout_mode"] = "full"
+    values["layout_mode"] = "full"
     return values
 
 
 def _parse_basic_form(form: dict[str, list[str]], config: dict[str, Any]) -> dict[str, Any]:
     out: dict[str, Any] = {}
-    for key in ("window_mode", "layout_mode", "content_mode", "vangogh_painting", "painting_scale", "painting_cycle", "painting_cycle_seconds"):
+    for key in ("window_mode", "content_mode", "vangogh_painting", "painting_scale", "painting_cycle", "painting_cycle_seconds"):
         if key in form:
             out[key] = _coerce_value(key, form.get(key, [""])[0])
     out["painting_cycle"] = "painting_cycle" in form
-    mode = str(out.get("content_mode", config.get("content_mode", "birds")) or "birds")
-    if mode == "paintings":
-        out["layout_mode"] = "full"
+    out["layout_mode"] = "full"
     return out
 
 
@@ -465,14 +462,11 @@ def _render_presets() -> str:
     <section class="card compact">
       <h2>Presets</h2>
       <div class="preset-row">
-                <button type="button" data-preset="birds">Birds</button>
-        <button type="button" data-preset="today-full">Today + fullscreen</button>
-        <button type="button" data-preset="today-framed">Today + framed</button>
-        <button type="button" data-preset="24h-full">24h + fullscreen</button>
-        <button type="button" data-preset="24h-framed">24h + framed</button>
-                <button type="button" data-preset="paintings-full">Paintings</button>
+        <button type="button" data-preset="birds-today">Birds — Today</button>
+        <button type="button" data-preset="birds-24h">Birds — 24h</button>
+        <button type="button" data-preset="paintings">Paintings</button>
       </div>
-            <p class="hint">Use presets to quickly set the simple editor controls.</p>
+      <p class="hint">Use presets to quickly switch between birds and paintings.</p>
     </section>
     """
 
@@ -559,8 +553,7 @@ def _render_alert(message: str, error: str) -> str:
 
 def _render_header(config: dict[str, Any], subtitle: str, nav_link: str, nav_label: str) -> str:
     status_bits = []
-    status_bits.append(f'<span class="status-chip">{html.escape(str(config.get("window_mode", "24h")))} window</span>')
-    status_bits.append(f'<span class="status-chip">{html.escape(str(config.get("layout_mode", "framed")))} layout</span>')
+    status_bits.append(f'<span class="status-chip">{html.escape(str(config.get("window_mode", "today")))} window</span>')
     status_bits.append(f'<span class="status-chip">{html.escape(str(config.get("content_mode", "birds")))} content</span>')
     return (
         '<header class="hero card">'
@@ -585,7 +578,6 @@ def render_basic_page(config: dict[str, Any], paintings: list[dict[str, Any]], m
     gallery = _render_painting_gallery(paintings, selected)
     content_mode = _field_value(config, "content_mode")
     window_mode = _field_value(config, "window_mode")
-    layout_mode = _field_value(config, "layout_mode")
     scale_field = _render_field("painting_scale", config)
     cycle_seconds = int(config.get("painting_cycle_seconds", 300) or 300)
     cycle_checked = " checked" if bool(config.get("painting_cycle")) else ""
@@ -613,8 +605,7 @@ def render_basic_page(config: dict[str, Any], paintings: list[dict[str, Any]], m
             <section class=\"card compact\">
                 <h2>Quick options</h2>
                 <div class=\"grid\">
-                    <div class=\"field\"><label>Frame window</label><select name=\"window_mode\"><option value=\"24h\"{" selected" if str(window_mode)=="24h" else ""}>24 hours</option><option value=\"today\"{" selected" if str(window_mode)=="today" else ""}>Today</option></select></div>
-                    <div class=\"field birds-only\"><label>Layout mode</label><select name=\"layout_mode\"><option value=\"framed\"{" selected" if str(layout_mode)=="framed" else ""}>Framed</option><option value=\"full\"{" selected" if str(layout_mode)=="full" else ""}>Fullscreen</option></select></div>
+                    <div class=\"field birds-only\"><label>Frame window</label><select name=\"window_mode\"><option value=\"24h\"{" selected" if str(window_mode)=="24h" else ""}>24 hours</option><option value=\"today\"{" selected" if str(window_mode)=="today" else ""}>Today</option></select></div>
                     <div class=\"field\"><label>Display content</label><select name=\"content_mode\"><option value=\"birds\"{" selected" if str(content_mode)=="birds" else ""}>Birds</option><option value=\"paintings\"{" selected" if str(content_mode)=="paintings" else ""}>Paintings</option></select></div>
                     <div class=\"field paintings-only\"><label class=\"checkbox\"><input type=\"checkbox\" name=\"painting_cycle\" value=\"1\"{cycle_checked}><span>Cycle all saved images</span></label></div>
                     <div class=\"field paintings-only\"><label>Cycle interval (seconds)</label><input type=\"number\" name=\"painting_cycle_seconds\" min=\"10\" max=\"86400\" step=\"1\" value=\"{cycle_seconds}\"></div>
